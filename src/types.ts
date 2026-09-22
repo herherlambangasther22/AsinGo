@@ -38,8 +38,9 @@ export interface CartItem {
   notes?: string;
 }
 
-export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'tempo';
-export type PaymentStatus = 'paid' | 'pending';
+export type PaymentMethod = 'cash' | 'qris' | 'transfer' | 'ewallet' | 'tempo';
+export type PaymentStatus = 'paid' | 'pending' | 'cancelled';
+export type OrderSource = 'pos_kasir' | 'web_pelanggan' | 'kasir_langsung';
 
 export interface OrderItem {
   productId: string;
@@ -50,6 +51,18 @@ export interface OrderItem {
   notes?: string;
 }
 
+export interface BankAccount {
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+}
+
+export interface EWalletAccount {
+  walletName: string;
+  phoneNumber: string;
+  accountHolder: string;
+}
+
 export interface Order {
   id: string;
   invoiceNumber: string;
@@ -58,15 +71,20 @@ export interface Order {
   cashierRole: UserRole;
   customerName: string;
   customerPhone?: string;
+  customerAddress?: string;
   items: OrderItem[];
   subtotal: number;
   discount: number;
   finalTotal: number;
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
+  orderSource?: OrderSource;
+  paymentChannel?: string;
   cashGiven?: number;
   change?: number;
   notes?: string;
+  confirmedAt?: string;
+  confirmedBy?: string;
 }
 
 export interface StockLog {
@@ -93,6 +111,9 @@ export interface StoreSettings {
   currencyPrefix: string;
   logoUrl?: string;
   loadingLogoUrl?: string;
+  bankAccounts?: BankAccount[];
+  eWallets?: EWalletAccount[];
+  qrisImageUrl?: string;
 }
 
 export interface AuditLogEntry {
@@ -166,6 +187,8 @@ export interface RealtimeMessage {
     | 'STOCK_UPDATED'
     | 'IMAGE_UPDATED'
     | 'ORDER_CREATED'
+    | 'ORDER_CONFIRMED'
+    | 'ORDER_UPDATED'
     | 'ALERT'
     | 'BACKUP_CREATED'
     | 'DATABASE_RESTORED'

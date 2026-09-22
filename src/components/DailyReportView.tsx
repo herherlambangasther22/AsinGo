@@ -45,8 +45,10 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const [isEditingWa, setIsEditingWa] = useState<boolean>(false);
   const [copiedText, setCopiedText] = useState<boolean>(false);
 
-  // Filter orders by selected day
-  const filteredOrders = orders.filter((o) => o.createdAt.startsWith(selectedDate));
+  // Filter orders by selected day - ONLY paid & confirmed by Kasir
+  const paidOrders = orders.filter((o) => o.paymentStatus === 'paid');
+  const pendingOrders = orders.filter((o) => o.paymentStatus === 'pending');
+  const filteredOrders = paidOrders.filter((o) => o.createdAt.startsWith(selectedDate));
 
   // Calculations
   const totalRevenue = filteredOrders.reduce((sum, o) => sum + o.finalTotal, 0);
@@ -58,10 +60,13 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
   const cashOrders = filteredOrders.filter((o) => o.paymentMethod === 'cash');
   const qrisOrders = filteredOrders.filter((o) => o.paymentMethod === 'qris');
   const transferOrders = filteredOrders.filter((o) => o.paymentMethod === 'transfer');
+  const ewalletOrders = filteredOrders.filter((o) => o.paymentMethod === 'ewallet');
 
   const cashTotal = cashOrders.reduce((sum, o) => sum + o.finalTotal, 0);
   const qrisTotal = qrisOrders.reduce((sum, o) => sum + o.finalTotal, 0);
   const transferTotal = transferOrders.reduce((sum, o) => sum + o.finalTotal, 0);
+  const ewalletTotal = ewalletOrders.reduce((sum, o) => sum + o.finalTotal, 0);
+  const nonCashTotal = qrisTotal + transferTotal + ewalletTotal;
 
   // Product sales breakdown
   const itemMap: { [name: string]: { qty: number; total: number; count: number } } = {};
@@ -232,17 +237,27 @@ export const DailyReportView: React.FC<DailyReportViewProps> = ({
 
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between text-gray-500 text-xs font-bold uppercase tracking-wider">
-            <span>Non-Tunai (QRIS/Trf)</span>
+            <span>Non-Tunai (QRIS/Bank/E-Wallet)</span>
             <QrCode className="w-4 h-4 text-blue-600" />
           </div>
           <span className="font-black text-2xl text-gray-900 block mt-2">
-            {formatRupiah(qrisTotal + transferTotal)}
+            {formatRupiah(nonCashTotal)}
           </span>
           <span className="text-[11px] text-gray-500 mt-1 block">
-            QRIS: {formatRupiah(qrisTotal)} • Trf: {formatRupiah(transferTotal)}
+            QRIS: {formatRupiah(qrisTotal)} • Trf: {formatRupiah(transferTotal)} • E-Wallet: {formatRupiah(ewalletTotal)}
           </span>
         </div>
       </div>
+
+      {pendingOrders.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-xl flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+            <span className="font-semibold">Info Kasir: Terdapat {pendingOrders.length} pesanan web pelanggan yang masih menunggu pembayaran & konfirmasi di Kasir.</span>
+          </div>
+          <span className="text-[11px] text-amber-700 font-medium">Hanya pesanan berstatus Lunas yang dimasukkan ke dalam omzet resmi penjualan.</span>
+        </div>
+      )}
 
       {/* Main Breakdown: Table of Orders & Product Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

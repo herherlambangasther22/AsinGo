@@ -40,9 +40,10 @@ export const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
 }) => {
   const [timeRange, setTimeRange] = useState<'30days' | '7days' | 'all'>('30days');
 
-  // Filter orders based on time range
+  // Filter orders based on time range - ONLY paid & confirmed by Kasir
+  const paidOrders = orders.filter((o) => o.paymentStatus === 'paid');
   const now = new Date();
-  const filteredOrders = orders.filter((o) => {
+  const filteredOrders = paidOrders.filter((o) => {
     if (timeRange === 'all') return true;
     const orderDate = new Date(o.createdAt);
     const diffDays = (now.getTime() - orderDate.getTime()) / (1000 * 3600 * 24);

@@ -11,6 +11,19 @@ export const INITIAL_SETTINGS: StoreSettings = {
   currencyPrefix: 'Rp',
   logoUrl: '/uploads/logo-1790060389221.png',
   loadingLogoUrl: '/uploads/loading-logo-1790060389226.png',
+  bankAccounts: [
+    { bankName: 'BCA', accountNumber: '883-0512-990', accountHolder: 'AsinGo Official' },
+    { bankName: 'Mandiri', accountNumber: '142-00-1928374-1', accountHolder: 'AsinGo Official' },
+    { bankName: 'BRI', accountNumber: '0123-01-084729-50-8', accountHolder: 'AsinGo Official' },
+    { bankName: 'BNI', accountNumber: '089-234-1189', accountHolder: 'AsinGo Official' },
+  ],
+  eWallets: [
+    { walletName: 'DANA', phoneNumber: '0895-3511-21278', accountHolder: 'AsinGo Official' },
+    { walletName: 'GoPay', phoneNumber: '0895-3511-21278', accountHolder: 'AsinGo Official' },
+    { walletName: 'OVO', phoneNumber: '0895-3511-21278', accountHolder: 'AsinGo Official' },
+    { walletName: 'ShopeePay', phoneNumber: '0895-3511-21278', accountHolder: 'AsinGo Official' },
+  ],
+  qrisImageUrl: '/uploads/logo-1790060389221.png',
 };
 
 export const INITIAL_USERS: User[] = [

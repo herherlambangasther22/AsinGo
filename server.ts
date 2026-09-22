@@ -689,23 +689,62 @@ async function startServer() {
     res.status(404).json({ error: 'Produk tidak ditemukan' });
   });
 
-  // Create Order / POS Checkout
+  // Create Order / POS Checkout / Web Customer Order
   app.post('/api/orders', (req, res) => {
     const orderData: Order = req.body;
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0].replace(/-/g, '');
     const invoiceNumber = orderData.invoiceNumber || `ASN-${todayStr}-${String(orders.length + 1).padStart(3, '0')}`;
     const clientIp = getClientIp(req);
+    const isCustomerWebOrder = orderData.orderSource === 'web_pelanggan';
 
+    if (isCustomerWebOrder) {
+      // Customer online order: WAJIB berstatus pending sampai dikonfirmasi & dilunasi oleh kasir
+      const newOrder: Order = {
+        ...orderData,
+        id: `ord-${Date.now()}`,
+        invoiceNumber,
+        createdAt: now.toISOString(),
+        paymentStatus: 'pending',
+        orderSource: 'web_pelanggan',
+        cashierName: 'Menunggu Kasir',
+        cashierRole: 'pelanggan',
+      };
+
+      orders.unshift(newOrder);
+      const checksum = saveMasterDatabase('customer_order', newOrder.customerName || 'Pelanggan Web');
+
+      broadcast('ORDER_CREATED', {
+        order: newOrder,
+        isNewCustomerOrder: true,
+      });
+
+      logSecurityAudit(
+        'WRITE_ORDER',
+        newOrder.customerName || 'Pelanggan Web',
+        'pelanggan',
+        clientIp,
+        `Pesanan Baru Masuk dari Web: #${invoiceNumber} oleh ${newOrder.customerName} (Rp ${(newOrder.finalTotal || 0).toLocaleString('id-ID')}) - Menunggu Pembayaran Kasir`,
+        'SUCCESS',
+        checksum
+      );
+
+      return res.status(201).json({ success: true, order: newOrder });
+    }
+
+    // Direct in-store POS Order created by Cashier
     const newOrder: Order = {
       ...orderData,
       id: `ord-${Date.now()}`,
       invoiceNumber,
       createdAt: now.toISOString(),
       paymentStatus: 'paid',
+      orderSource: 'pos_kasir',
+      confirmedAt: now.toISOString(),
+      confirmedBy: orderData.cashierName || 'Kasir',
     };
 
-    // Deduct stock on server
+    // Deduct stock on server for direct cashier checkout
     const stockDeductions: StockLog[] = [];
     const lowStockTriggered: Product[] = [];
 
@@ -752,7 +791,7 @@ async function startServer() {
       newOrder.cashierName || 'Kasir',
       'kasir',
       clientIp,
-      `Transaksi POS #${invoiceNumber} senilai Rp ${(newOrder.finalTotal || 0).toLocaleString('id-ID')} (${newOrder.paymentMethod.toUpperCase()})`,
+      `Transaksi POS Kasir #${invoiceNumber} senilai Rp ${(newOrder.finalTotal || 0).toLocaleString('id-ID')} (${newOrder.paymentMethod.toUpperCase()})`,
       'SUCCESS',
       checksum
     );
@@ -766,6 +805,126 @@ async function startServer() {
     }
 
     res.json({ success: true, order: newOrder, updatedProducts: products });
+  });
+
+  // Cashier Confirms Payment for Web Customer / Pending Order
+  app.post('/api/orders/:id/confirm-payment', (req, res) => {
+    const { id } = req.params;
+    const { paymentMethod, paymentChannel, cashGiven, change, cashierName, cashierRole } = req.body;
+    const clientIp = getClientIp(req);
+    const now = new Date();
+
+    const order = orders.find((o) => o.id === id);
+    if (!order) {
+      return res.status(404).json({ error: 'Pesanan tidak ditemukan' });
+    }
+
+    if (order.paymentStatus === 'paid') {
+      return res.status(400).json({ error: 'Pesanan sudah berstatus lunas' });
+    }
+
+    // Deduct stock for confirmed order
+    const stockDeductions: StockLog[] = [];
+    const lowStockTriggered: Product[] = [];
+
+    order.items.forEach((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      if (product) {
+        const prev = product.currentStockKg;
+        const next = Math.max(0, Number((prev - item.quantityKg).toFixed(2)));
+        product.currentStockKg = next;
+        product.updatedAt = now.toISOString();
+
+        const log: StockLog = {
+          id: `log-${Date.now()}-${item.productId}`,
+          productId: item.productId,
+          productName: item.productName,
+          changeKg: -item.quantityKg,
+          previousStockKg: prev,
+          newStockKg: next,
+          type: 'sale',
+          note: `Konfirmasi Pembayaran Kasir #${order.invoiceNumber} (${order.customerName})`,
+          createdBy: cashierName || 'Kasir',
+          createdAt: now.toISOString(),
+        };
+        stockLogs.unshift(log);
+        stockDeductions.push(log);
+
+        if (next <= product.minStockKg) {
+          lowStockTriggered.push(product);
+        }
+      }
+    });
+
+    order.paymentStatus = 'paid';
+    if (paymentMethod) order.paymentMethod = paymentMethod;
+    if (paymentChannel) order.paymentChannel = paymentChannel;
+    if (cashGiven !== undefined) order.cashGiven = cashGiven;
+    if (change !== undefined) order.change = change;
+    order.cashierName = cashierName || 'Kasir';
+    order.cashierRole = cashierRole || 'kasir';
+    order.confirmedAt = now.toISOString();
+    order.confirmedBy = cashierName || 'Kasir';
+
+    const checksum = saveMasterDatabase('order_confirmed', cashierName || 'Kasir');
+
+    broadcast('ORDER_CONFIRMED', {
+      order,
+      products,
+      stockLogs: stockDeductions,
+    });
+
+    logSecurityAudit(
+      'WRITE_ORDER',
+      cashierName || 'Kasir',
+      'kasir',
+      clientIp,
+      `Kasir konfirmasi pembayaran pesanan #${order.invoiceNumber} (${order.customerName}) Rp ${(order.finalTotal || 0).toLocaleString('id-ID')} via ${order.paymentChannel || order.paymentMethod}`,
+      'SUCCESS',
+      checksum
+    );
+
+    if (lowStockTriggered.length > 0) {
+      broadcast('ALERT', {
+        type: 'LOW_STOCK',
+        products: lowStockTriggered,
+        message: `Stok menipis untuk ${lowStockTriggered.map((p) => p.name).join(', ')}`,
+      });
+    }
+
+    res.json({ success: true, order, updatedProducts: products });
+  });
+
+  // Cashier Cancels Order
+  app.post('/api/orders/:id/cancel', (req, res) => {
+    const { id } = req.params;
+    const { reason, cashierName } = req.body;
+    const clientIp = getClientIp(req);
+
+    const order = orders.find((o) => o.id === id);
+    if (!order) {
+      return res.status(404).json({ error: 'Pesanan tidak ditemukan' });
+    }
+
+    order.paymentStatus = 'cancelled';
+    if (reason) {
+      order.notes = (order.notes ? order.notes + ' | ' : '') + `Dibatalkan: ${reason}`;
+    }
+
+    const checksum = saveMasterDatabase('order_cancelled', cashierName || 'Kasir');
+
+    broadcast('ORDER_UPDATED', { order });
+    logSecurityAudit(
+      'WRITE_ORDER',
+      cashierName || 'Kasir',
+      'kasir',
+      clientIp,
+      `Kasir membatalkan pesanan #${order.invoiceNumber}: ${reason || 'Dibatalkan oleh kasir'}`,
+      'WARN',
+      checksum
+    );
+
+    res.json({ success: true, order });
   });
 
   // Get Settings

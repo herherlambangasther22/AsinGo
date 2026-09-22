@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Product, Order, StockLog, StoreSettings, User, UserRole, RealtimeMessage } from './types';
+import { Product, Order, StockLog, StoreSettings, User, UserRole, RealtimeMessage, PaymentMethod } from './types';
 import { INITIAL_PRODUCTS, INITIAL_SETTINGS, INITIAL_USERS } from './data/initialProducts';
 import { generateInitialOrders, generateInitialStockLogs } from './data/initialOrders';
 import { Navbar } from './components/Navbar';
@@ -17,6 +17,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { BackupRestoreView } from './components/BackupRestoreView';
 import { LoadingScreen } from './components/LoadingScreen';
 import { CheckCircle, AlertTriangle, Info, Bell, X } from 'lucide-react';
+import { playCashierChime, playSuccessSound } from './lib/audioSound';
 
 export default function App() {
   // Primary States
@@ -204,7 +205,26 @@ export default function App() {
 
   const sseRef = useRef<EventSource | null>(null);
 
-  // Route Synchronization Handler
+  // Unified Tab Switching Handler with URL Synchronization
+  const handleTabChange = (
+    nextTab: 'pos' | 'stock' | 'daily' | 'analytics' | 'catalog' | 'backup'
+  ) => {
+    setCurrentTab(nextTab);
+    const routeMap: Record<string, string> = {
+      pos: '/kasir',
+      catalog: '/katalog',
+      daily: '/daily',
+      stock: '/staff',
+      analytics: '/admin',
+      backup: '/backup',
+    };
+    const targetRoute = routeMap[nextTab] || '/';
+    if (window.history.pushState && window.location.pathname !== targetRoute) {
+      window.history.pushState({}, '', targetRoute);
+    }
+  };
+
+  // Route Synchronization Handler (Does not force reset when tab changes within allowed permissions)
   const handleRouteSync = useCallback((customUser?: User) => {
     const activeUser = customUser || currentUser;
     const path = window.location.pathname.toLowerCase();
@@ -213,7 +233,7 @@ export default function App() {
 
     if (cleanRoute === '/admin' || cleanRoute === '/owner') {
       if (activeUser.role === 'owner') {
-        if (currentTab === 'catalog') setCurrentTab('analytics');
+        setCurrentTab((prev) => (prev === 'catalog' ? 'analytics' : prev));
       } else {
         setModalInitialRole('owner');
         setModalRequestedRoute('/admin');
@@ -221,7 +241,7 @@ export default function App() {
       }
     } else if (cleanRoute === '/kasir' || cleanRoute === '/pos') {
       if (activeUser.role === 'kasir' || activeUser.role === 'owner') {
-        setCurrentTab('pos');
+        setCurrentTab((prev) => (prev === 'daily' || prev === 'catalog' ? prev : 'pos'));
       } else {
         setModalInitialRole('kasir');
         setModalRequestedRoute('/kasir');
@@ -229,7 +249,7 @@ export default function App() {
       }
     } else if (cleanRoute === '/staff' || cleanRoute === '/gudang' || cleanRoute === '/stock') {
       if (activeUser.role === 'gudang' || activeUser.role === 'owner') {
-        setCurrentTab('stock');
+        setCurrentTab((prev) => (prev === 'catalog' ? prev : 'stock'));
       } else {
         setModalInitialRole('gudang');
         setModalRequestedRoute('/staff');
@@ -239,7 +259,7 @@ export default function App() {
       if (activeUser.role === 'owner' || activeUser.role === 'kasir') {
         setCurrentTab('daily');
       } else {
-        setModalInitialRole('owner');
+        setModalInitialRole('kasir');
         setModalRequestedRoute('/daily');
         setIsUserRoleModalOpen(true);
       }
@@ -262,7 +282,7 @@ export default function App() {
     } else if (cleanRoute === '/katalog' || cleanRoute === '/catalog') {
       setCurrentTab('catalog');
     }
-  }, [currentUser, currentTab]);
+  }, [currentUser]);
 
   // Initial Route Check & Popstate listener
   useEffect(() => {
@@ -367,6 +387,11 @@ export default function App() {
     };
   }, []);
 
+  // Pending Web Orders Count waiting for Cashier confirmation
+  const pendingWebOrdersCount = orders.filter(
+    (o) => o.orderSource === 'web_pelanggan' && o.paymentStatus === 'pending'
+  ).length;
+
   const showToast = (type: 'info' | 'warning' | 'success', title: string, message: string) => {
     const id = `toast-${Date.now()}`;
     setToastNotification({ id, type, title, message });
@@ -419,7 +444,29 @@ export default function App() {
         if (msg.payload.products) {
           setProducts(msg.payload.products);
         }
-        showToast('success', 'Transaksi Kasir Baru', `Nota #${msg.payload.order.invoiceNumber} berhasil diproses.`);
+        if (msg.payload.order?.orderSource === 'web_pelanggan') {
+          playCashierChime();
+          showToast(
+            'info',
+            'Orderan Baru dari Web!',
+            `Pesanan #${msg.payload.order.invoiceNumber} dari ${msg.payload.order.customerName} masuk. Silakan konfirmasi pembayaran di Kasir.`
+          );
+        } else {
+          showToast('success', 'Transaksi Kasir Baru', `Nota #${msg.payload.order.invoiceNumber} berhasil diproses.`);
+        }
+        break;
+
+      case 'ORDER_UPDATED':
+        setOrders((prev) => {
+          const updated = msg.payload.order as Order;
+          return prev.map((o) => (o.id === updated.id ? updated : o));
+        });
+        if (msg.payload.products) {
+          setProducts(msg.payload.products);
+        }
+        if (msg.payload.stockLogs && Array.isArray(msg.payload.stockLogs)) {
+          setStockLogs((prev) => [...msg.payload.stockLogs, ...prev]);
+        }
         break;
 
       case 'BACKUP_CREATED':
@@ -560,10 +607,11 @@ export default function App() {
 
     const newOrder: Order = {
       ...(orderPayload as Order),
-      id: `ord-${Date.now()}`,
-      invoiceNumber,
+      id: orderPayload.id || `ord-${Date.now()}`,
+      invoiceNumber: orderPayload.invoiceNumber || invoiceNumber,
       createdAt: now.toISOString(),
-      paymentStatus: 'paid',
+      orderSource: orderPayload.orderSource || 'kasir_langsung',
+      paymentStatus: orderPayload.paymentStatus || 'paid',
     };
 
     try {
@@ -577,6 +625,9 @@ export default function App() {
         if (data.order) {
           setOrders((prev) => [data.order, ...prev]);
           if (data.updatedProducts) setProducts(data.updatedProducts);
+          if (data.order.orderSource === 'web_pelanggan') {
+            playCashierChime();
+          }
           return data.order;
         }
       }
@@ -584,10 +635,93 @@ export default function App() {
       console.warn('Offline order processing:', e);
     }
 
-    // Client fallback: deduct stock locally
+    // Client fallback:
+    // Only deduct stock immediately if payment is already 'paid' (direct POS checkout)
+    // If pending from web customer, do NOT deduct stock yet until cashier confirms payment!
+    if (newOrder.paymentStatus === 'paid') {
+      setProducts((prev) =>
+        prev.map((p) => {
+          const boughtItem = newOrder.items.find((it) => it.productId === p.id);
+          if (boughtItem) {
+            const nextStock = Math.max(0, Number((p.currentStockKg - boughtItem.quantityKg).toFixed(2)));
+            return { ...p, currentStockKg: nextStock };
+          }
+          return p;
+        })
+      );
+    }
+
+    setOrders((prev) => [newOrder, ...prev]);
+    if (newOrder.orderSource === 'web_pelanggan') {
+      playCashierChime();
+    }
+    return newOrder;
+  };
+
+  const handleCreateCustomerOrder = async (orderPayload: Partial<Order>): Promise<Order | null> => {
+    return handleCreateOrder({
+      ...orderPayload,
+      orderSource: 'web_pelanggan',
+      paymentStatus: 'pending',
+    });
+  };
+
+  const handleConfirmPayment = async (
+    orderId: string,
+    paymentData: {
+      paymentMethod: PaymentMethod;
+      paymentChannel: string;
+      cashGiven?: number;
+      change?: number;
+    }
+  ): Promise<Order | null> => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/confirm-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...paymentData,
+          confirmedBy: currentUser.name,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.order) {
+          setOrders((prev) => prev.map((o) => (o.id === data.order.id ? data.order : o)));
+          if (data.updatedProducts) setProducts(data.updatedProducts);
+          playSuccessSound();
+          showToast(
+            'success',
+            'Pembayaran Disahkan Kasir',
+            `Pesanan #${data.order.invoiceNumber} lunas (${data.order.paymentChannel || data.order.paymentMethod.toUpperCase()}).`
+          );
+          return data.order;
+        }
+      }
+    } catch (e) {
+      console.warn('Offline confirm payment:', e);
+    }
+
+    // Client-side fallback
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return null;
+
+    const confirmed: Order = {
+      ...target,
+      paymentStatus: 'paid',
+      paymentMethod: paymentData.paymentMethod,
+      paymentChannel: paymentData.paymentChannel,
+      cashGiven: paymentData.cashGiven,
+      change: paymentData.change,
+      confirmedBy: currentUser.name,
+      confirmedAt: new Date().toISOString(),
+    };
+
+    // Deduct stock for offline fallback
     setProducts((prev) =>
       prev.map((p) => {
-        const boughtItem = newOrder.items.find((it) => it.productId === p.id);
+        const boughtItem = confirmed.items.find((it) => it.productId === p.id);
         if (boughtItem) {
           const nextStock = Math.max(0, Number((p.currentStockKg - boughtItem.quantityKg).toFixed(2)));
           return { ...p, currentStockKg: nextStock };
@@ -596,8 +730,53 @@ export default function App() {
       })
     );
 
-    setOrders((prev) => [newOrder, ...prev]);
-    return newOrder;
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? confirmed : o)));
+    playSuccessSound();
+    showToast(
+      'success',
+      'Pembayaran Disahkan Kasir',
+      `Pesanan #${confirmed.invoiceNumber} lunas (${confirmed.paymentChannel}).`
+    );
+    return confirmed;
+  };
+
+  const handleCancelOrder = async (orderId: string, reason?: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason,
+          cancelledBy: currentUser.name,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.order) {
+          setOrders((prev) => prev.map((o) => (o.id === data.order.id ? data.order : o)));
+          showToast('info', 'Pesanan Dibatalkan', `Pesanan #${data.order.invoiceNumber} dibatalkan.`);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('Offline cancel order:', e);
+    }
+
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId
+          ? {
+              ...o,
+              paymentStatus: 'cancelled',
+              cancelReason: reason || 'Dibatalkan oleh kasir',
+              confirmedBy: currentUser.name,
+            }
+          : o
+      )
+    );
+    showToast('info', 'Pesanan Dibatalkan', `Pesanan dibatalkan.`);
+    return true;
   };
 
   const handleUpdateSettings = async (newSettings: Partial<StoreSettings>) => {
@@ -648,7 +827,15 @@ export default function App() {
       }
       setCurrentTab(nextTab);
 
-      const route = user.role === 'owner' ? '/admin' : user.role === 'kasir' ? '/kasir' : '/staff';
+      const routeMap: Record<string, string> = {
+        pos: '/kasir',
+        catalog: '/katalog',
+        daily: '/daily',
+        stock: '/staff',
+        analytics: '/admin',
+        backup: '/backup',
+      };
+      const route = routeMap[nextTab] || (user.role === 'owner' ? '/admin' : user.role === 'kasir' ? '/kasir' : '/staff');
       if (window.history.pushState) {
         window.history.pushState({}, '', route);
       }
@@ -709,7 +896,7 @@ export default function App() {
       {/* Main Navbar */}
       <Navbar
         currentTab={currentTab}
-        setCurrentTab={setCurrentTab}
+        setCurrentTab={handleTabChange}
         currentUser={currentUser}
         onOpenRoleModal={() => setIsUserRoleModalOpen(true)}
         onOpenLowStockModal={() => setIsLowStockModalOpen(true)}
@@ -723,6 +910,7 @@ export default function App() {
         isRealtimeConnected={isRealtimeConnected}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
+        pendingWebOrdersCount={pendingWebOrdersCount}
       />
 
       {/* Main View Area */}
@@ -732,8 +920,11 @@ export default function App() {
             products={products}
             currentUser={currentUser}
             settings={settings}
+            orders={orders}
             onOpenImageModal={(prod) => setImageModalProduct(prod)}
             onCreateOrder={handleCreateOrder}
+            onConfirmPayment={handleConfirmPayment}
+            onCancelOrder={handleCancelOrder}
             onOrderSuccess={(order) => setReceiptModalOrder(order)}
           />
         )}
@@ -742,6 +933,8 @@ export default function App() {
           <CustomerCatalogView
             products={products}
             settings={settings}
+            orders={orders}
+            onCreateCustomerOrder={handleCreateCustomerOrder}
             customerCart={customerCart}
             setCustomerCart={setCustomerCart}
             isCartDrawerOpen={isCartDrawerOpen}

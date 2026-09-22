@@ -32,6 +32,7 @@ interface NavbarProps {
   isRealtimeConnected: boolean;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
+  pendingWebOrdersCount?: number;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -50,6 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   isRealtimeConnected,
   mobileMenuOpen,
   setMobileMenuOpen,
+  pendingWebOrdersCount = 0,
 }) => {
   const lowStockCount = products.filter((p) => p.currentStockKg <= p.minStockKg).length;
 
@@ -119,7 +121,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                     }`}
                   >
                     <Icon className="w-4 h-4" />
-                    {item.label}
+                    <span>{item.label}</span>
+                    {item.id === 'pos' && pendingWebOrdersCount > 0 && (
+                      <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                        {pendingWebOrdersCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -269,6 +276,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 >
                   <Icon className="w-4 h-4 shrink-0" />
                   <span className="truncate">{item.label}</span>
+                  {item.id === 'pos' && pendingWebOrdersCount > 0 && (
+                    <span className="ml-auto px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                      {pendingWebOrdersCount}
+                    </span>
+                  )}
                 </button>
               );
             })}

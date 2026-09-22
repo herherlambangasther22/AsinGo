@@ -61,7 +61,11 @@ export const UserRoleModal: React.FC<UserRoleModalProps> = ({
 
     // Determine target default tab for role
     let targetTab: 'pos' | 'stock' | 'daily' | 'analytics' | 'catalog' | 'backup' = 'pos';
-    if (selectedRole === 'owner') {
+    if (requestedRoute?.includes('daily') || requestedRoute?.includes('laporan')) {
+      targetTab = 'daily';
+    } else if (requestedRoute?.includes('katalog') || requestedRoute?.includes('catalog')) {
+      targetTab = 'catalog';
+    } else if (selectedRole === 'owner') {
       targetTab = 'analytics';
     } else if (selectedRole === 'kasir') {
       targetTab = 'pos';

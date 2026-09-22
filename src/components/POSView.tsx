@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Product, CartItem, Order, User, StoreSettings, WeightOption } from '../types';
+import { Product, CartItem, Order, User, StoreSettings, WeightOption, PaymentMethod } from '../types';
 import { formatRupiah, formatWeight } from '../lib/exportUtils';
 import {
   Search,
@@ -17,15 +17,32 @@ import {
   User as UserIcon,
   Phone,
   StickyNote,
+  Smartphone,
+  Globe,
+  Bell,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { CashierWebOrdersTab } from './CashierWebOrdersTab';
+import { CashierPaymentModal } from './CashierPaymentModal';
+import { playCashierChime, playSuccessSound } from '../lib/audioSound';
 
 interface POSViewProps {
   products: Product[];
   currentUser: User;
   settings: StoreSettings;
+  orders: Order[];
   onOpenImageModal: (product: Product) => void;
   onCreateOrder: (order: Partial<Order>) => Promise<Order | null>;
+  onConfirmPayment: (
+    orderId: string,
+    paymentData: {
+      paymentMethod: PaymentMethod;
+      paymentChannel: string;
+      cashGiven?: number;
+      change?: number;
+    }
+  ) => Promise<Order | null>;
+  onCancelOrder: (orderId: string, reason?: string) => Promise<boolean>;
   onOrderSuccess: (order: Order) => void;
 }
 
@@ -33,10 +50,17 @@ export const POSView: React.FC<POSViewProps> = ({
   products,
   currentUser,
   settings,
+  orders,
   onOpenImageModal,
   onCreateOrder,
+  onConfirmPayment,
+  onCancelOrder,
   onOrderSuccess,
 }) => {
+  const [activeTab, setActiveTab] = useState<'pos_direct' | 'web_orders'>('pos_direct');
+  const [selectedWebOrderForPayment, setSelectedWebOrderForPayment] = useState<Order | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState<boolean>(false);
+
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -44,10 +68,15 @@ export const POSView: React.FC<POSViewProps> = ({
   const [customerPhone, setCustomerPhone] = useState<string>('');
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [discountAmount, setDiscountAmount] = useState<number>(0);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'qris' | 'transfer'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentChannel, setPaymentChannel] = useState<string>('Tunai Langsung');
   const [cashGiven, setCashGiven] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [showQrisPreview, setShowQrisPreview] = useState<boolean>(false);
+
+  const pendingWebOrdersCount = orders.filter(
+    (o) => o.orderSource === 'web_pelanggan' && o.paymentStatus === 'pending'
+  ).length;
 
   // Weight selector states per product
   const [selectedWeights, setSelectedWeights] = useState<{ [productId: string]: { option: WeightOption; customKg: number } }>({});
@@ -204,6 +233,9 @@ export const POSView: React.FC<POSViewProps> = ({
         discount: discountAmount,
         finalTotal,
         paymentMethod,
+        paymentChannel: paymentChannel || (paymentMethod === 'cash' ? 'Tunai Kasir' : paymentMethod.toUpperCase()),
+        orderSource: 'kasir_langsung',
+        confirmedBy: currentUser.name,
         paymentStatus: 'paid',
         cashGiven: paymentMethod === 'cash' ? cashGiven : undefined,
         change: paymentMethod === 'cash' ? change : undefined,
@@ -241,8 +273,65 @@ export const POSView: React.FC<POSViewProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-4">
+      {/* Cashier Hub Mode Switcher Header */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-xs">
+        <div className="flex items-center gap-2">
+          <button
+            id="pos-direct-tab-btn"
+            type="button"
+            onClick={() => setActiveTab('pos_direct')}
+            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'pos_direct'
+                ? 'btn-timbul-primary'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4 text-emerald-400" />
+            <span>Kasir POS (Jual Langsung)</span>
+          </button>
+
+          <button
+            id="pos-web-orders-tab-btn"
+            type="button"
+            onClick={() => setActiveTab('web_orders')}
+            className={`flex-1 sm:flex-initial px-4 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all relative ${
+              activeTab === 'web_orders'
+                ? 'btn-timbul-primary'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <Globe className="w-4 h-4 text-blue-300" />
+            <span>Orderan Web Pelanggan</span>
+            {pendingWebOrdersCount > 0 && (
+              <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
+                {pendingWebOrdersCount} Baru
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-gray-500 font-medium px-2">
+          <span>Petugas Kasir:</span>
+          <span className="font-bold text-[#1B2E25] bg-[#E8F2EC] px-2.5 py-1 rounded-lg border border-[#2D4B3E]/20">
+            {currentUser.name} ({currentUser.role.toUpperCase()})
+          </span>
+        </div>
+      </div>
+
+      {activeTab === 'web_orders' ? (
+        <CashierWebOrdersTab
+          orders={orders}
+          settings={settings}
+          onOpenPaymentModal={(order: Order) => {
+            setSelectedWebOrderForPayment(order);
+            setIsPaymentModalOpen(true);
+          }}
+          onViewReceipt={onOrderSuccess}
+          onCancelOrder={onCancelOrder}
+        />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* LEFT COLUMN: Product Catalog & Fast Weight Selector (7 cols on lg, 8 on xl) */}
         <div className="lg:col-span-7 xl:col-span-8 space-y-4">
           {/* Search & Category Filter Bar */}
@@ -620,11 +709,14 @@ export const POSView: React.FC<POSViewProps> = ({
             {/* Payment Method Selector */}
             <div className="p-3 border-t border-gray-200 space-y-2">
               <span className="text-[11px] font-bold text-gray-700 block">Metode Pembayaran:</span>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 <button
                   id="pay-cash-btn"
                   type="button"
-                  onClick={() => setPaymentMethod('cash')}
+                  onClick={() => {
+                    setPaymentMethod('cash');
+                    setPaymentChannel('Tunai Kasir');
+                  }}
                   className={`py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
                     paymentMethod === 'cash'
                       ? 'btn-timbul-primary'
@@ -640,6 +732,7 @@ export const POSView: React.FC<POSViewProps> = ({
                   type="button"
                   onClick={() => {
                     setPaymentMethod('qris');
+                    setPaymentChannel('QRIS Kasir');
                     setShowQrisPreview(true);
                   }}
                   className={`py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
@@ -655,7 +748,10 @@ export const POSView: React.FC<POSViewProps> = ({
                 <button
                   id="pay-transfer-btn"
                   type="button"
-                  onClick={() => setPaymentMethod('transfer')}
+                  onClick={() => {
+                    setPaymentMethod('transfer');
+                    setPaymentChannel('Transfer BCA');
+                  }}
                   className={`py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
                     paymentMethod === 'transfer'
                       ? 'btn-timbul-primary'
@@ -664,6 +760,23 @@ export const POSView: React.FC<POSViewProps> = ({
                 >
                   <CreditCard className="w-4 h-4" />
                   Transfer
+                </button>
+
+                <button
+                  id="pay-ewallet-btn"
+                  type="button"
+                  onClick={() => {
+                    setPaymentMethod('ewallet');
+                    setPaymentChannel('DANA / GoPay');
+                  }}
+                  className={`py-2 rounded-xl text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                    paymentMethod === 'ewallet'
+                      ? 'btn-timbul-primary'
+                      : 'btn-timbul-white text-gray-700'
+                  }`}
+                >
+                  <Smartphone className="w-4 h-4" />
+                  E-Wallet
                 </button>
               </div>
 
@@ -736,6 +849,14 @@ export const POSView: React.FC<POSViewProps> = ({
                   <p className="text-gray-600 font-mono text-[11px]">Mandiri: 132-00-998877-6</p>
                 </div>
               )}
+
+              {paymentMethod === 'ewallet' && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-0.5">
+                  <p className="font-bold text-emerald-900">E-Wallet Resmi AsinGo:</p>
+                  <p className="text-emerald-800 font-mono text-[11px]">DANA / GoPay / OVO: 0895-3511-21278</p>
+                  <p className="text-[10px] text-emerald-700">a/n AsinGo Official</p>
+                </div>
+              )}
             </div>
 
             {/* Note input */}
@@ -767,6 +888,30 @@ export const POSView: React.FC<POSViewProps> = ({
           </div>
         </div>
       </div>
+      )}
+
+      {/* Cashier Payment Modal for Web Orders */}
+      <CashierPaymentModal
+        order={selectedWebOrderForPayment}
+        settings={settings}
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedWebOrderForPayment(null);
+        }}
+        onConfirm={async (orderId, paymentData) => {
+          const confirmed = await onConfirmPayment(orderId, paymentData);
+          if (confirmed) {
+            confetti({
+              particleCount: 80,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#2D4B3E', '#15803D', '#F59E0B', '#FFFFFF'],
+            });
+            onOrderSuccess(confirmed);
+          }
+        }}
+      />
     </div>
   );
 };

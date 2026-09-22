@@ -122,9 +122,15 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               </div>
               <div className="flex justify-between text-gray-600 pt-0.5">
                 <span>Metode Bayar:</span>
-                <span className="uppercase font-semibold">{order.paymentMethod} (LUNAS)</span>
+                <span className="uppercase font-semibold">{order.paymentChannel ? `${order.paymentChannel} (${order.paymentMethod.toUpperCase()})` : order.paymentMethod.toUpperCase()} (LUNAS)</span>
               </div>
-              {order.cashGiven !== undefined && (
+              {order.confirmedBy && (
+                <div className="flex justify-between text-gray-600 pt-0.5">
+                  <span>Disahkan Kasir:</span>
+                  <span className="font-semibold text-gray-900">{order.confirmedBy}</span>
+                </div>
+              )}
+              {order.cashGiven !== undefined && order.cashGiven > 0 && (
                 <>
                   <div className="flex justify-between text-gray-600">
                     <span>Uang Diterima:</span>

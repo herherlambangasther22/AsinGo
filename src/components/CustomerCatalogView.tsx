@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Product, StoreSettings, WeightOption } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Product, StoreSettings, WeightOption, Order, PaymentMethod } from '../types';
 import { formatRupiah, formatWeight } from '../lib/exportUtils';
 import {
   Search,
@@ -21,7 +21,15 @@ import {
   Table,
   Lock,
   ShieldCheck,
+  CreditCard,
+  QrCode,
+  Banknote,
+  Smartphone,
+  Clock,
+  Send,
 } from 'lucide-react';
+import { CustomerOrderStatusModal } from './CustomerOrderStatusModal';
+import { playCashierChime, playSuccessSound } from '../lib/audioSound';
 
 export interface CustomerCartItem {
   product: Product;
@@ -32,6 +40,7 @@ export interface CustomerCartItem {
 interface CustomerCatalogViewProps {
   products: Product[];
   settings: StoreSettings;
+  orders?: Order[];
   customerCart: CustomerCartItem[];
   setCustomerCart: React.Dispatch<React.SetStateAction<CustomerCartItem[]>>;
   isCartDrawerOpen: boolean;
@@ -45,11 +54,13 @@ interface CustomerCatalogViewProps {
   onOpenImageModal?: (product: Product) => void;
   canEditPhotos?: boolean;
   onOpenStaffLogin?: (role?: 'owner' | 'kasir' | 'gudang') => void;
+  onCreateCustomerOrder?: (orderPayload: Partial<Order>) => Promise<Order | null>;
 }
 
 export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
   products,
   settings,
+  orders = [],
   customerCart,
   setCustomerCart,
   isCartDrawerOpen,
@@ -63,6 +74,7 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
   onOpenImageModal,
   canEditPhotos,
   onOpenStaffLogin,
+  onCreateCustomerOrder,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('Semua');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -70,6 +82,26 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
   const [selectedWeights, setSelectedWeights] = useState<{ [productId: string]: WeightOption }>({});
   const [toastAdded, setToastAdded] = useState<string | null>(null);
   const [showPriceTableModal, setShowPriceTableModal] = useState<boolean>(false);
+
+  // New Cashier-Centric Order Flow states
+  const [preferredMethod, setPreferredMethod] = useState<PaymentMethod>('transfer');
+  const [preferredChannel, setPreferredChannel] = useState<string>('Bank BCA');
+  const [activeCustomerOrder, setActiveCustomerOrder] = useState<Order | null>(null);
+  const [isStatusModalOpen, setIsStatusModalOpen] = useState<boolean>(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
+
+  // Synchronize active order when updated in realtime by Cashier
+  useEffect(() => {
+    if (activeCustomerOrder && orders.length > 0) {
+      const live = orders.find((o) => o.id === activeCustomerOrder.id);
+      if (live) {
+        if (activeCustomerOrder.paymentStatus === 'pending' && live.paymentStatus === 'paid') {
+          playSuccessSound();
+        }
+        setActiveCustomerOrder(live);
+      }
+    }
+  }, [orders, activeCustomerOrder]);
 
   const categories = ['Semua', 'Teri & Bilis', 'Ikan Kering Belah', 'Jambal & Gabus', 'Cumi & Seafood', 'Ikan Air Tawar & Sungai', 'Bal-balan & Grosir'];
 
@@ -172,6 +204,62 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
     const encoded = encodeURIComponent(msg);
     const targetPhone = settings.ownerWaNumber.replace(/[^0-9]/g, '');
     window.open(`https://wa.me/${targetPhone}?text=${encoded}`, '_blank');
+  };
+
+  const handleSendOrderToCashier = async () => {
+    if (customerCart.length === 0) return;
+    if (!customerName.trim()) {
+      alert('Silakan masukkan Nama Pemesan atau Nama Warung Anda!');
+      return;
+    }
+    if (!customerPhone.trim()) {
+      alert('Silakan masukkan Nomor WhatsApp / HP aktif untuk konfirmasi kasir!');
+      return;
+    }
+
+    if (!onCreateCustomerOrder) {
+      handleSendOrderWhatsApp();
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+    try {
+      const orderItems = customerCart.map((item) => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        quantityKg: item.quantityKg,
+        pricePerKg: item.product.pricePerKg,
+        subtotal: Math.round(item.product.pricePerKg * item.quantityKg),
+      }));
+
+      const newOrder = await onCreateCustomerOrder({
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        customerAddress: customerAddress.trim(),
+        notes: customerNotes.trim(),
+        items: orderItems,
+        subtotal: cartTotal,
+        discount: 0,
+        finalTotal: cartTotal,
+        paymentMethod: preferredMethod,
+        paymentChannel: preferredChannel,
+        orderSource: 'web_pelanggan',
+        paymentStatus: 'pending',
+      });
+
+      if (newOrder) {
+        setActiveCustomerOrder(newOrder);
+        setIsStatusModalOpen(true);
+        setIsCartDrawerOpen(false);
+        setCustomerCart([]);
+        playCashierChime();
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Terjadi kendala saat mengirim pesanan ke kasir. Silakan coba lagi.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
   };
 
   return (
@@ -624,6 +712,90 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
                     />
                   </div>
 
+                  {/* Payment Method Selection for Customer */}
+                  <div className="pt-2 border-t border-gray-200 space-y-2">
+                    <label className="text-xs font-bold text-gray-800 block">
+                      Pilihan Metode Pembayaran ke Kasir:
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredMethod('transfer');
+                          setPreferredChannel('Bank BCA');
+                        }}
+                        className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center gap-2 ${
+                          preferredMethod === 'transfer'
+                            ? 'border-[#2D4B3E] bg-[#E8F2EC] font-bold text-[#1B2E25]'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4 text-[#2D4B3E] shrink-0" />
+                        <div>
+                          <div className="font-bold leading-tight">Transfer Bank</div>
+                          <div className="text-[10px] text-gray-500 font-normal">BCA / Mandiri / BRI / BNI</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredMethod('ewallet');
+                          setPreferredChannel('DANA');
+                        }}
+                        className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center gap-2 ${
+                          preferredMethod === 'ewallet'
+                            ? 'border-[#2D4B3E] bg-[#E8F2EC] font-bold text-[#1B2E25]'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Smartphone className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <div className="font-bold leading-tight">E-Wallet</div>
+                          <div className="text-[10px] text-gray-500 font-normal">DANA/GoPay/OVO</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredMethod('qris');
+                          setPreferredChannel('QRIS AsinGo Official');
+                        }}
+                        className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center gap-2 ${
+                          preferredMethod === 'qris'
+                            ? 'border-[#2D4B3E] bg-[#E8F2EC] font-bold text-[#1B2E25]'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <QrCode className="w-4 h-4 text-blue-600 shrink-0" />
+                        <div>
+                          <div className="font-bold leading-tight">QRIS Toko</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Scan Semua Bank</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreferredMethod('cash');
+                          setPreferredChannel('Tunai Langsung / COD');
+                        }}
+                        className={`p-2 rounded-xl border text-left text-xs transition-all flex items-center gap-2 ${
+                          preferredMethod === 'cash'
+                            ? 'border-[#2D4B3E] bg-[#E8F2EC] font-bold text-[#1B2E25]'
+                            : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Banknote className="w-4 h-4 text-amber-600 shrink-0" />
+                        <div>
+                          <div className="font-bold leading-tight">Tunai / COD</div>
+                          <div className="text-[10px] text-gray-500 font-normal">Bayar Kasir / COD</div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Summary row */}
                   <div className="pt-3 border-t border-gray-200 flex justify-between items-baseline font-black">
                     <span className="text-xs text-gray-700">Total Estimasi ({formatWeight(cartTotalKg)}):</span>
@@ -635,28 +807,41 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
 
             {/* Drawer Footer Actions */}
             <div className="bg-white px-4 sm:px-5 py-3.5 sm:py-4 border-t border-gray-200 space-y-2.5 shrink-0">
+              {/* Primary Action: Kirim Pesanan ke Kasir Toko */}
+              <button
+                id="send-order-to-cashier-btn"
+                type="button"
+                disabled={customerCart.length === 0 || isSubmittingOrder}
+                onClick={handleSendOrderToCashier}
+                className="w-full btn-timbul-primary py-3.5 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 text-center tracking-wide disabled:opacity-40"
+              >
+                <Send className="w-4 h-4 text-emerald-300" />
+                <span>
+                  {isSubmittingOrder
+                    ? 'Meneruskan Pesanan ke Kasir...'
+                    : `KIRIM PESANAN KE KASIR TOKO • ${formatRupiah(cartTotal)}`}
+                </span>
+              </button>
+              <p className="text-[11px] text-gray-500 text-center leading-tight">
+                ⚡ Pesanan langsung masuk ke sistem Kasir secara real-time untuk konfirmasi pembayaran & stok.
+              </p>
+
+              {/* Secondary Option: WhatsApp */}
               <button
                 id="send-wa-order-cart-btn"
                 type="button"
                 disabled={customerCart.length === 0}
                 onClick={handleSendOrderWhatsApp}
-                className="w-full btn-timbul-wa py-3.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2.5 text-center disabled:opacity-40"
+                className="w-full btn-timbul-white py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 text-center text-gray-700 hover:text-emerald-700"
               >
-                <MessageCircle className="w-5 h-5 shrink-0 text-white" />
-                <span className="leading-tight font-bold">Pesan Sekarang via WhatsApp</span>
+                <MessageCircle className="w-4 h-4 text-emerald-600" />
+                <span>Pesan Cepat via WhatsApp Admin</span>
               </button>
-
-              <div className="flex items-center justify-center gap-1.5 text-[11px] text-gray-500 text-center">
-                <span>Terkirim ke Admin WA:</span>
-                <span className="font-bold font-mono text-[#1B2E25] bg-gray-100 px-2 py-0.5 rounded-md border border-gray-200">
-                  {settings.ownerWaNumber}
-                </span>
-              </div>
 
               <button
                 type="button"
                 onClick={() => setIsCartDrawerOpen(false)}
-                className="w-full btn-timbul-white py-2 rounded-xl text-xs font-bold text-gray-700"
+                className="w-full py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-800 text-center"
               >
                 Lanjut Belanja / Tambah Ikan Lain
               </button>
@@ -860,6 +1045,54 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Floating Active Order Status Bar if customer has made an order */}
+      {activeCustomerOrder && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 w-11/12 max-w-lg bg-[#1B2E25] text-white p-3.5 rounded-2xl shadow-2xl border border-emerald-400 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                activeCustomerOrder.paymentStatus === 'paid' ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'
+              }`}
+            >
+              {activeCustomerOrder.paymentStatus === 'paid' ? (
+                <CheckCircle2 className="w-4 h-4" />
+              ) : (
+                <Clock className="w-4 h-4 animate-spin" />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="font-bold text-xs truncate">
+                Pesanan #{activeCustomerOrder.invoiceNumber}
+              </div>
+              <div className="text-[11px] text-gray-300 truncate">
+                {activeCustomerOrder.paymentStatus === 'paid' ? (
+                  <span className="text-emerald-300 font-bold">LUNAS Dikonfirmasi Kasir!</span>
+                ) : (
+                  <span className="text-amber-300">Menunggu Pembayaran & Konfirmasi Kasir</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsStatusModalOpen(true)}
+            className="btn-timbul-white px-3 py-1.5 rounded-xl font-bold text-xs shrink-0 text-gray-800 flex items-center gap-1"
+          >
+            <span>Lihat Status</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Customer Order Status & Payment Guide Modal */}
+      <CustomerOrderStatusModal
+        order={activeCustomerOrder}
+        settings={settings}
+        isOpen={isStatusModalOpen}
+        onClose={() => setIsStatusModalOpen(false)}
+      />
     </div>
   );
 };
