@@ -79,8 +79,15 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => setCurrentTab(isPelanggan ? 'catalog' : 'pos')}
               className="flex items-center gap-2.5 text-left focus:outline-none group cursor-pointer"
             >
-              <div className="w-10 h-10 rounded-xl bg-white text-[#1b2e25] flex items-center justify-center font-black text-xl border border-gray-300 shadow-sm group-hover:scale-105 transition-transform">
-                🐟
+              <div className="w-10 h-10 rounded-xl bg-white border-2 border-[#2d4b3e] shadow-xs group-hover:scale-105 transition-transform flex items-center justify-center p-1 overflow-hidden shrink-0">
+                <img
+                  src={settings.logoUrl || '/logo.png'}
+                  alt={settings.storeName}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo.png';
+                  }}
+                />
               </div>
               <div>
                 <div className="flex items-center gap-1.5">
@@ -91,23 +98,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </p>
               </div>
             </button>
-
-            {/* Realtime Status Badge */}
-            {!isPelanggan && (
-              <div className="hidden md:flex items-center gap-1.5 ml-2 bg-[#12221b] px-2.5 py-1 rounded-full border border-[#2d4b3e] text-[11px]">
-                {isRealtimeConnected ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    <span className="text-emerald-300 font-medium">Server Live Sync</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                    <span className="text-amber-200 font-medium">Lokal / Standalone</span>
-                  </>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Desktop & Tablet Navigation Tabs (Staff Only) */}
@@ -254,15 +244,8 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Mobile Drawer Menu for Staff */}
       {!isPelanggan && mobileMenuOpen && (
         <div className="lg:hidden bg-[#12221b] border-t border-[#2d4b3e] px-4 pt-3 pb-4 space-y-2">
-          <div className="flex items-center justify-between pb-2 border-b border-[#2d4b3e]">
-            <span className="text-xs text-[#c1d6cc]">Menu Staff:</span>
-            <div className="flex items-center gap-1 text-[11px]">
-              {isRealtimeConnected ? (
-                <span className="text-emerald-400 font-medium">● Online Server</span>
-              ) : (
-                <span className="text-amber-400 font-medium">● Standalone Mode</span>
-              )}
-            </div>
+          <div className="pb-2 border-b border-[#2d4b3e]">
+            <span className="text-xs text-[#c1d6cc] font-semibold">Menu Staff:</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 pt-1">

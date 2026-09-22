@@ -228,11 +228,11 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
     const payload = {
       timestamp: new Date().toISOString(),
       storeName: settings.storeName,
-      version: '4.0.0',
+      version: '5.0.0',
       database: {
-        products: JSON.parse(localStorage.getItem('asingo_products_v4') || '[]'),
-        orders: JSON.parse(localStorage.getItem('asingo_orders_v4') || '[]'),
-        stockLogs: JSON.parse(localStorage.getItem('asingo_stock_logs_v4') || '[]'),
+        products: JSON.parse(localStorage.getItem('asingo_products_v5') || localStorage.getItem('asingo_products_v4') || '[]'),
+        orders: JSON.parse(localStorage.getItem('asingo_orders_v5') || localStorage.getItem('asingo_orders_v4') || '[]'),
+        stockLogs: JSON.parse(localStorage.getItem('asingo_stock_logs_v5') || localStorage.getItem('asingo_stock_logs_v4') || '[]'),
         settings: JSON.parse(localStorage.getItem('asingo_settings') || JSON.stringify(settings)),
       }
     };
@@ -363,12 +363,15 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
       // Local storage restore fallback
       if (uploadedPayload.database) {
         if (Array.isArray(uploadedPayload.database.products)) {
+          localStorage.setItem('asingo_products_v5', JSON.stringify(uploadedPayload.database.products));
           localStorage.setItem('asingo_products_v4', JSON.stringify(uploadedPayload.database.products));
         }
         if (Array.isArray(uploadedPayload.database.orders)) {
+          localStorage.setItem('asingo_orders_v5', JSON.stringify(uploadedPayload.database.orders));
           localStorage.setItem('asingo_orders_v4', JSON.stringify(uploadedPayload.database.orders));
         }
         if (Array.isArray(uploadedPayload.database.stockLogs)) {
+          localStorage.setItem('asingo_stock_logs_v5', JSON.stringify(uploadedPayload.database.stockLogs));
           localStorage.setItem('asingo_stock_logs_v4', JSON.stringify(uploadedPayload.database.stockLogs));
         }
         if (uploadedPayload.database.settings) {

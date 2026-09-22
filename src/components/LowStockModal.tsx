@@ -16,11 +16,11 @@ export const LowStockModal: React.FC<LowStockModalProps> = ({
   onClose,
   onRestock,
 }) => {
-  if (!isOpen) return null;
-
   const lowStockList = products.filter((p) => p.currentStockKg <= p.minStockKg);
   const [restockAmounts, setRestockAmounts] = useState<{ [id: string]: number }>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
+
+  if (!isOpen) return null;
 
   const handleQuickAdd = async (productId: string, defaultAdd: number) => {
     const amount = restockAmounts[productId] || defaultAdd;

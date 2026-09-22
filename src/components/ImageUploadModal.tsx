@@ -16,13 +16,20 @@ export const ImageUploadModal: React.FC<ImageUploadModalProps> = ({
   onClose,
   onSaveImage,
 }) => {
-  if (!isOpen || !product) return null;
-
   const [activeTab, setActiveTab] = useState<'upload' | 'url' | 'preset'>('upload');
-  const [selectedUrl, setSelectedUrl] = useState<string>(product.imageUrl);
+  const [selectedUrl, setSelectedUrl] = useState<string>(product?.imageUrl || '');
   const [urlInput, setUrlInput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [previewError, setPreviewError] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (product) {
+      setSelectedUrl(product.imageUrl);
+      setPreviewError(false);
+    }
+  }, [product]);
+
+  if (!isOpen || !product) return null;
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

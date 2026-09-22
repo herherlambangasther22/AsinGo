@@ -27,9 +27,9 @@ export const CustomerProfileModal: React.FC<CustomerProfileModalProps> = ({
   setCustomerAddress,
   onOpenStaffLogin,
 }) => {
-  if (!isOpen) return null;
-
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
+
+  if (!isOpen) return null;
 
   const handleSaveLocal = () => {
     localStorage.setItem('asingo_customer_name', customerName);

@@ -21,8 +21,6 @@ export const UserRoleModal: React.FC<UserRoleModalProps> = ({
   initialRole,
   requestedRoute,
 }) => {
-  if (!isOpen) return null;
-
   const isPelanggan = currentUser.role === 'pelanggan';
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole || 'owner');
   const [pinInput, setPinInput] = useState<string>('');
@@ -33,6 +31,8 @@ export const UserRoleModal: React.FC<UserRoleModalProps> = ({
       setSelectedRole(initialRole);
     }
   }, [initialRole, isOpen]);
+
+  if (!isOpen) return null;
 
   const staffUsers = users.filter((u) => u.role !== 'pelanggan');
   const pelangganUser = users.find((u) => u.role === 'pelanggan') || {

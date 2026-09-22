@@ -676,6 +676,43 @@ export const StockManager: React.FC<StockManagerProps> = ({
                 />
               </div>
 
+              <div>
+                <label className="font-bold text-gray-700 block mb-1">URL Foto Produk</label>
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 border border-gray-300 overflow-hidden shrink-0">
+                    <img
+                      src={editingProduct.imageUrl || 'https://images.unsplash.com/photo-1534483509719-3feaee7c30da?w=600&auto=format&fit=crop&q=80'}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
+                  <input
+                    type="url"
+                    value={editingProduct.imageUrl || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, imageUrl: e.target.value })}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                <div>
+                  <span className="font-bold text-gray-800 block text-xs">Status Penjualan</span>
+                  <span className="text-[11px] text-gray-500">Tampilkan produk ini di katalog pelanggan & kasir POS</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editingProduct.isAvailable !== false}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, isAvailable: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#2D4B3E]"></div>
+                </label>
+              </div>
+
               <div className="pt-2 flex items-center justify-end gap-2 border-t border-gray-200">
                 <button
                   type="button"

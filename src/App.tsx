@@ -15,16 +15,17 @@ import { UserRoleModal } from './components/UserRoleModal';
 import { CustomerProfileModal } from './components/CustomerProfileModal';
 import { SettingsModal } from './components/SettingsModal';
 import { BackupRestoreView } from './components/BackupRestoreView';
+import { LoadingScreen } from './components/LoadingScreen';
 import { CheckCircle, AlertTriangle, Info, Bell, X } from 'lucide-react';
 
 export default function App() {
   // Primary States
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('asingo_products_v4');
+    const saved = localStorage.getItem('asingo_products_v5');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 19) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed;
         }
       } catch (e) {
@@ -35,26 +36,47 @@ export default function App() {
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('asingo_orders_v4');
+    const saved = localStorage.getItem('asingo_orders_v5');
     return saved ? JSON.parse(saved) : generateInitialOrders();
   });
 
   const [stockLogs, setStockLogs] = useState<StockLog[]>(() => {
-    const saved = localStorage.getItem('asingo_stock_logs_v4');
+    const saved = localStorage.getItem('asingo_stock_logs_v5');
     return saved ? JSON.parse(saved) : generateInitialStockLogs();
   });
 
   const [settings, setSettings] = useState<StoreSettings>(() => {
     const saved = localStorage.getItem('asingo_settings');
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.ownerWaNumber === '6281234567890' || !parsed.ownerWaNumber) {
-        parsed.ownerWaNumber = '+62 895-3511-21278';
-      }
-      return parsed;
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.ownerWaNumber === '6281234567890' || !parsed.ownerWaNumber) {
+          parsed.ownerWaNumber = '+62 895-3511-21278';
+        }
+        if (!parsed.storeName || parsed.storeName === 'AsinGo Ikan Asin') {
+          parsed.storeName = 'AsinGo';
+        }
+        const effectiveLogo = (!parsed.logoUrl || parsed.logoUrl === '/logo.svg')
+          ? INITIAL_SETTINGS.logoUrl
+          : parsed.logoUrl;
+        const effectiveLoadingLogo = (!parsed.loadingLogoUrl || parsed.loadingLogoUrl === '/logo.svg')
+          ? (parsed.logoUrl || INITIAL_SETTINGS.loadingLogoUrl)
+          : parsed.loadingLogoUrl;
+
+        return {
+          ...INITIAL_SETTINGS,
+          ...parsed,
+          logoUrl: effectiveLogo,
+          loadingLogoUrl: effectiveLoadingLogo,
+        };
+      } catch (e) {}
     }
     return INITIAL_SETTINGS;
   });
+
+  // App-wide loading screen & live admin preview states
+  const [isAppLoading, setIsAppLoading] = useState<boolean>(true);
+  const [isPreviewingLoading, setIsPreviewingLoading] = useState<boolean>(false);
 
   const DEFAULT_PELANGGAN: User = INITIAL_USERS.find((u) => u.role === 'pelanggan') || {
     id: 'u-cust',
@@ -221,15 +243,15 @@ export default function App() {
 
   // Save to localStorage as offline safety backup
   useEffect(() => {
-    localStorage.setItem('asingo_products_v4', JSON.stringify(products));
+    localStorage.setItem('asingo_products_v5', JSON.stringify(products));
   }, [products]);
 
   useEffect(() => {
-    localStorage.setItem('asingo_orders_v4', JSON.stringify(orders));
+    localStorage.setItem('asingo_orders_v5', JSON.stringify(orders));
   }, [orders]);
 
   useEffect(() => {
-    localStorage.setItem('asingo_stock_logs_v4', JSON.stringify(stockLogs));
+    localStorage.setItem('asingo_stock_logs_v5', JSON.stringify(stockLogs));
   }, [stockLogs]);
 
   useEffect(() => {
@@ -252,8 +274,21 @@ export default function App() {
       })
       .catch(() => {
         // Fallback silently to client-side localStorage state (essential for Vercel & offline)
+      })
+      .finally(() => {
+        setTimeout(() => {
+          setIsAppLoading(false);
+        }, 1200);
       });
   };
+
+  // Graceful safety timer for loading screen finish
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsAppLoading(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     // 1. Initial State Fetch
@@ -380,7 +415,7 @@ export default function App() {
       )
     );
 
-    // 2. Send to Server for live broadcast
+    // 2. Send to Server for live broadcast and permanent disk persistence
     try {
       const res = await fetch(`/api/products/${productId}/image`, {
         method: 'POST',
@@ -388,10 +423,17 @@ export default function App() {
         body: JSON.stringify({ imageUrl: newImageUrl, updatedBy: currentUser.name }),
       });
       if (res.ok) {
-        showToast('success', 'Foto Berhasil Disimpan', 'Semua perangkat sekarang melihat foto terbaru ini.');
+        const data = await res.json();
+        if (data.product && data.product.imageUrl) {
+          setProducts((prev) =>
+            prev.map((p) => (p.id === productId ? { ...p, imageUrl: data.product.imageUrl } : p))
+          );
+        }
+        showToast('success', 'Foto Disimpan Permanen', 'Foto produk berhasil disimpan dan diselaraskan ke semua perangkat.');
       }
     } catch (e) {
       console.warn('Server sync skipped in offline mode:', e);
+      showToast('success', 'Foto Disimpan Lokal', 'Foto berhasil disimpan pada browser ini.');
     }
   };
 
@@ -523,13 +565,21 @@ export default function App() {
     const merged = { ...settings, ...newSettings };
     setSettings(merged);
     try {
-      await fetch('/api/settings', {
+      const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(merged),
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.settings) {
+          setSettings(data.settings);
+        }
+      }
+      showToast('success', 'Pengaturan & Logo Diperbarui', 'Logo dan data toko berhasil disimpan.');
     } catch (e) {
       console.warn(e);
+      showToast('info', 'Tersimpan di Perangkat', 'Pengaturan disimpan pada cache browser ini.');
     }
   };
 
@@ -568,6 +618,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F6F8F6] text-[#1A2721] flex flex-col selection:bg-[#2D4B3E] selection:text-white pb-12">
+      {/* Elegant Loading Screen (Initial Load or Admin Live Demo) */}
+      <LoadingScreen
+        isLoading={isAppLoading || isPreviewingLoading}
+        logoUrl={settings.logoUrl}
+        loadingLogoUrl={settings.loadingLogoUrl}
+        storeName={settings.storeName}
+        tagline={settings.tagline}
+        onFinished={() => {
+          if (isPreviewingLoading) setIsPreviewingLoading(false);
+        }}
+      />
+
       {/* Real-time Toast Notifications */}
       {toastNotification && (
         <div
@@ -706,66 +768,82 @@ export default function App() {
 
       {/* MODALS */}
       {/* Central Server Image Upload / Photo Changer Modal */}
-      <ImageUploadModal
-        product={imageModalProduct}
-        isOpen={!!imageModalProduct}
-        onClose={() => setImageModalProduct(null)}
-        onSaveImage={handleSaveImage}
-      />
+      {imageModalProduct && (
+        <ImageUploadModal
+          product={imageModalProduct}
+          isOpen={true}
+          onClose={() => setImageModalProduct(null)}
+          onSaveImage={handleSaveImage}
+        />
+      )}
 
       {/* Printable Receipt & Customer WhatsApp Share Modal */}
-      <ReceiptModal
-        order={receiptModalOrder}
-        settings={settings}
-        isOpen={!!receiptModalOrder}
-        onClose={() => setReceiptModalOrder(null)}
-      />
+      {receiptModalOrder && (
+        <ReceiptModal
+          order={receiptModalOrder}
+          settings={settings}
+          isOpen={true}
+          onClose={() => setReceiptModalOrder(null)}
+        />
+      )}
 
       {/* Low Stock Warning & 1-Click Restock Modal */}
-      <LowStockModal
-        products={products}
-        isOpen={isLowStockModalOpen}
-        onClose={() => setIsLowStockModalOpen(false)}
-        onRestock={async (productId, addKg, note) => {
-          await handleAdjustStock(productId, addKg, 'restock', note);
-        }}
-      />
+      {isLowStockModalOpen && (
+        <LowStockModal
+          products={products}
+          isOpen={true}
+          onClose={() => setIsLowStockModalOpen(false)}
+          onRestock={async (productId, addKg, note) => {
+            await handleAdjustStock(productId, addKg, 'restock', note);
+          }}
+        />
+      )}
 
       {/* Multi-User & Role Switcher Modal */}
-      <UserRoleModal
-        users={users}
-        currentUser={currentUser}
-        isOpen={isUserRoleModalOpen}
-        onClose={() => {
-          setIsUserRoleModalOpen(false);
-          setModalRequestedRoute('');
-        }}
-        onSelectUser={handleSelectUser}
-        initialRole={modalInitialRole}
-        requestedRoute={modalRequestedRoute}
-      />
+      {isUserRoleModalOpen && (
+        <UserRoleModal
+          users={users}
+          currentUser={currentUser}
+          isOpen={true}
+          onClose={() => {
+            setIsUserRoleModalOpen(false);
+            setModalRequestedRoute('');
+          }}
+          onSelectUser={handleSelectUser}
+          initialRole={modalInitialRole}
+          requestedRoute={modalRequestedRoute}
+        />
+      )}
 
       {/* Customer Profile & Saved Address Modal */}
-      <CustomerProfileModal
-        isOpen={isCustomerProfileOpen}
-        onClose={() => setIsCustomerProfileOpen(false)}
-        settings={settings}
-        customerName={customerName}
-        setCustomerName={setCustomerName}
-        customerPhone={customerPhone}
-        setCustomerPhone={setCustomerPhone}
-        customerAddress={customerAddress}
-        setCustomerAddress={setCustomerAddress}
-        onOpenStaffLogin={() => setIsUserRoleModalOpen(true)}
-      />
+      {isCustomerProfileOpen && (
+        <CustomerProfileModal
+          isOpen={true}
+          onClose={() => setIsCustomerProfileOpen(false)}
+          settings={settings}
+          customerName={customerName}
+          setCustomerName={setCustomerName}
+          customerPhone={customerPhone}
+          setCustomerPhone={setCustomerPhone}
+          customerAddress={customerAddress}
+          setCustomerAddress={setCustomerAddress}
+          onOpenStaffLogin={() => setIsUserRoleModalOpen(true)}
+        />
+      )}
 
       {/* Store & WhatsApp Settings Modal (Admin) */}
-      <SettingsModal
-        settings={settings}
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        onSaveSettings={handleUpdateSettings}
-      />
+      {isSettingsModalOpen && (
+        <SettingsModal
+          settings={settings}
+          isOpen={true}
+          onClose={() => setIsSettingsModalOpen(false)}
+          onSaveSettings={handleUpdateSettings}
+          onTriggerLoadingPreview={() => {
+            setIsPreviewingLoading(true);
+            setTimeout(() => setIsPreviewingLoading(false), 3000);
+          }}
+        />
+      )}
     </div>
   );
 }

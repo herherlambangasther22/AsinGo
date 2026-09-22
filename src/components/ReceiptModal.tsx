@@ -54,7 +54,17 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
             className="bg-white p-5 border border-dashed border-gray-300 rounded-xl shadow-xs font-mono text-xs text-gray-800 space-y-3"
           >
             {/* Store Header */}
-            <div className="text-center border-b border-dashed border-gray-400 pb-3">
+            <div className="text-center border-b border-dashed border-gray-400 pb-3 flex flex-col items-center">
+              <div className="w-10 h-10 mb-1.5 p-1 bg-white rounded-lg border border-[#2D4B3E]/30 flex items-center justify-center">
+                <img
+                  src={settings.logoUrl || '/logo.svg'}
+                  alt={settings.storeName}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/logo.svg';
+                  }}
+                />
+              </div>
               <h2 className="font-bold text-base text-[#1b2e25] tracking-wider uppercase">{settings.storeName}</h2>
               <p className="text-[11px] text-gray-600">{settings.tagline}</p>
               <p className="text-[10px] text-gray-500 mt-0.5">{settings.address}</p>

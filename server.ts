@@ -259,25 +259,30 @@ function loadMasterDatabase() {
       const content = fs.readFileSync(MASTER_DB_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (parsed.database && Array.isArray(parsed.database.products)) {
-        products = parsed.database.products;
-        orders = parsed.database.orders || [];
-        stockLogs = parsed.database.stockLogs || [];
-        if (parsed.database.settings) storeSettings = parsed.database.settings;
-        if (parsed.database.users) users = parsed.database.users;
+        if (parsed.database.products.length === 10) {
+          products = parsed.database.products;
+          orders = parsed.database.orders || [];
+          stockLogs = parsed.database.stockLogs || [];
+          if (parsed.database.settings) storeSettings = parsed.database.settings;
+          if (parsed.database.users) users = parsed.database.users;
 
-        const currentCheck = calculateSha256(JSON.stringify(parsed.database));
-        console.log(`[DATABASE INIT] Loaded master database from ${MASTER_DB_FILE}. Checksum: ${currentCheck.substring(0, 16)}...`);
-        logSecurityAudit('READ', 'Server Init', 'system', '127.0.0.1', 'Master database berhasil dimuat saat server boot', 'SUCCESS', currentCheck);
-        return;
+          const currentCheck = calculateSha256(JSON.stringify(parsed.database));
+          console.log(`[DATABASE INIT] Loaded master database from ${MASTER_DB_FILE}. Checksum: ${currentCheck.substring(0, 16)}...`);
+          logSecurityAudit('READ', 'Server Init', 'system', '127.0.0.1', 'Master database berhasil dimuat saat server boot', 'SUCCESS', currentCheck);
+          return;
+        }
       }
     }
   } catch (err) {
     console.error('[DATABASE LOAD ERROR] Error loading master database:', err);
   }
 
-  // If no master exists, write initial master state
-  const initialChecksum = saveMasterDatabase('initial_boot', 'Server Bootstrap');
-  logSecurityAudit('WRITE_PRODUCT', 'Server Init', 'system', '127.0.0.1', 'Inisialisasi awal database master AsinGo', 'SUCCESS', initialChecksum);
+  // If no master exists or schema updated, write initial master state
+  products = [...INITIAL_PRODUCTS];
+  orders = generateInitialOrders();
+  stockLogs = generateInitialStockLogs();
+  const initialChecksum = saveMasterDatabase('initial_boot', 'Server Bootstrap (10 Produk Resmi)');
+  logSecurityAudit('WRITE_PRODUCT', 'Server Init', 'system', '127.0.0.1', 'Inisialisasi 10 produk resmi database master AsinGo', 'SUCCESS', initialChecksum);
 }
 
 loadMasterDatabase();
@@ -419,6 +424,13 @@ async function startServer() {
   app.use(express.json({ limit: '25mb' }));
   app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+  // Static uploads directory for permanent product & logo images
+  const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+  app.use('/uploads', express.static(UPLOADS_DIR));
+
   // Helper to extract client IP
   const getClientIp = (req: Request) => {
     return (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
@@ -535,6 +547,39 @@ async function startServer() {
     res.json({ success: true, product: newProduct });
   });
 
+  // Upload image endpoint (supports base64 and saves to /public/uploads/)
+  app.post('/api/upload', (req, res) => {
+    try {
+      const { image, name = 'upload', prefix = 'img' } = req.body;
+      if (!image) {
+        return res.status(400).json({ error: 'Data gambar tidak ditemukan' });
+      }
+
+      if (image.startsWith('data:image')) {
+        const matches = image.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches) {
+          const rawExt = matches[1];
+          const ext = rawExt === 'jpeg' ? 'jpg' : rawExt === 'svg+xml' ? 'svg' : rawExt;
+          const buffer = Buffer.from(matches[2], 'base64');
+          const cleanName = `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
+          const targetPath = path.join(UPLOADS_DIR, cleanName);
+          fs.writeFileSync(targetPath, buffer);
+          const publicUrl = `/uploads/${cleanName}`;
+          return res.json({ success: true, url: publicUrl });
+        }
+      }
+
+      if (image.startsWith('http://') || image.startsWith('https://') || image.startsWith('/')) {
+        return res.json({ success: true, url: image });
+      }
+
+      res.status(400).json({ error: 'Format gambar tidak didukung' });
+    } catch (err: any) {
+      console.error('[UPLOAD ERROR]', err);
+      res.status(500).json({ error: 'Gagal memproses gambar', details: err.message });
+    }
+  });
+
   // Update image directly for central server sync
   app.post('/api/products/:id/image', (req, res) => {
     const { id } = req.params;
@@ -546,12 +591,29 @@ async function startServer() {
       return res.status(404).json({ error: 'Produk tidak ditemukan' });
     }
 
-    product.imageUrl = imageUrl;
+    let finalImageUrl = imageUrl;
+    if (imageUrl && imageUrl.startsWith('data:image')) {
+      try {
+        const matches = imageUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches) {
+          const rawExt = matches[1];
+          const ext = rawExt === 'jpeg' ? 'jpg' : rawExt === 'svg+xml' ? 'svg' : rawExt;
+          const buffer = Buffer.from(matches[2], 'base64');
+          const fileName = `product-${id}-${Date.now()}.${ext}`;
+          fs.writeFileSync(path.join(UPLOADS_DIR, fileName), buffer);
+          finalImageUrl = `/uploads/${fileName}`;
+        }
+      } catch (e) {
+        console.error('Failed to write image to uploads:', e);
+      }
+    }
+
+    product.imageUrl = finalImageUrl;
     product.updatedAt = new Date().toISOString();
     product.updatedBy = updatedBy || 'Staff';
 
     saveMasterDatabase('product_image_update', updatedBy || 'Staff');
-    broadcast('IMAGE_UPDATED', { productId: id, imageUrl, product });
+    broadcast('IMAGE_UPDATED', { productId: id, imageUrl: finalImageUrl, product });
     broadcast('PRODUCT_UPDATED', product);
     logSecurityAudit('WRITE_PRODUCT', updatedBy || 'Staff', 'staff', clientIp, `Update foto produk: ${product.name}`, 'SUCCESS');
 
@@ -706,13 +768,54 @@ async function startServer() {
     res.json({ success: true, order: newOrder, updatedProducts: products });
   });
 
+  // Get Settings
+  app.get('/api/settings', (req, res) => {
+    res.json(storeSettings);
+  });
+
   // Update Settings
   app.post('/api/settings', (req, res) => {
     const clientIp = getClientIp(req);
-    storeSettings = { ...storeSettings, ...req.body };
+    const newSettings = { ...req.body };
+
+    // Process logoUrl if it is base64
+    if (newSettings.logoUrl && newSettings.logoUrl.startsWith('data:image')) {
+      try {
+        const matches = newSettings.logoUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches) {
+          const rawExt = matches[1];
+          const ext = rawExt === 'jpeg' ? 'jpg' : rawExt === 'svg+xml' ? 'svg' : rawExt;
+          const buffer = Buffer.from(matches[2], 'base64');
+          const cleanName = `logo-${Date.now()}.${ext}`;
+          fs.writeFileSync(path.join(UPLOADS_DIR, cleanName), buffer);
+          newSettings.logoUrl = `/uploads/${cleanName}`;
+        }
+      } catch (err) {
+        console.error('Failed to save logoUrl to file:', err);
+      }
+    }
+
+    // Process loadingLogoUrl if it is base64
+    if (newSettings.loadingLogoUrl && newSettings.loadingLogoUrl.startsWith('data:image')) {
+      try {
+        const matches = newSettings.loadingLogoUrl.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches) {
+          const rawExt = matches[1];
+          const ext = rawExt === 'jpeg' ? 'jpg' : rawExt === 'svg+xml' ? 'svg' : rawExt;
+          const buffer = Buffer.from(matches[2], 'base64');
+          const cleanName = `loading-logo-${Date.now()}.${ext}`;
+          fs.writeFileSync(path.join(UPLOADS_DIR, cleanName), buffer);
+          newSettings.loadingLogoUrl = `/uploads/${cleanName}`;
+        }
+      } catch (err) {
+        console.error('Failed to save loadingLogoUrl to file:', err);
+      }
+    }
+
+    storeSettings = { ...storeSettings, ...newSettings };
     const checksum = saveMasterDatabase('settings_update', 'Admin');
     broadcast('ALERT', { type: 'SETTINGS_UPDATED', settings: storeSettings });
-    logSecurityAudit('WRITE_PRODUCT', 'Admin', 'owner', clientIp, 'Perbarui pengaturan profil toko & WhatsApp', 'SUCCESS', checksum);
+    logSecurityAudit('WRITE_PRODUCT', 'Admin', 'owner', clientIp, 'Perbarui pengaturan profil toko, logo & WhatsApp', 'SUCCESS', checksum);
     res.json({ success: true, settings: storeSettings });
   });
 

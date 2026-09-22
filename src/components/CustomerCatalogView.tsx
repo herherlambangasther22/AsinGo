@@ -187,19 +187,38 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
       {/* Store Banner - Clean Flat Header */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🐟</span>
-            <h1 className="font-black text-2xl text-[#1B2E25]">Katalog Ikan Asin Pilihan</h1>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-white border-2 border-[#2D4B3E] shadow-xs flex items-center justify-center p-1 overflow-hidden shrink-0">
+              <img
+                src={settings.logoUrl || '/logo.png'}
+                alt={settings.storeName}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/logo.png';
+                }}
+              />
+            </div>
+            <div>
+              <h1 className="font-black text-xl sm:text-2xl text-[#1B2E25]">Katalog Ikan Asin Pilihan</h1>
+              <p className="text-[11px] text-[#2D4B3E] font-bold tracking-wide uppercase">{settings.storeName}</p>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 max-w-xl leading-relaxed">
+          <p className="text-xs text-gray-500 max-w-xl leading-relaxed mt-1">
             Pusat aneka ikan asin segar pilihan langsung dari pengeringan nelayan pesisir. Pilih berat kemasan dan pesan langsung ke WhatsApp Admin toko.
           </p>
         </div>
 
         {/* WhatsApp Store Info Pill */}
         <div className="flex items-center gap-3 bg-[#F2F7F4] p-3 rounded-xl border border-gray-300 text-xs shrink-0">
-          <div className="w-9 h-9 rounded-lg bg-[#2D4B3E] text-white flex items-center justify-center">
-            <Store className="w-4 h-4 text-emerald-300" />
+          <div className="w-10 h-10 rounded-lg bg-white border border-[#2D4B3E]/30 p-1 flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+            <img
+              src={settings.logoUrl || '/logo.png'}
+              alt={settings.storeName}
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/logo.png';
+              }}
+            />
           </div>
           <div>
             <span className="font-bold text-gray-900 block">{settings.storeName}</span>
@@ -230,7 +249,7 @@ export const CustomerCatalogView: React.FC<CustomerCatalogViewProps> = ({
             className="btn-timbul-primary px-4 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shrink-0 shadow-sm"
           >
             <Table className="w-4 h-4 text-emerald-300" />
-            <span>Lihat Tabel Daftar Harga (19 Jenis)</span>
+            <span>Lihat Tabel Daftar Harga (10 Jenis)</span>
           </button>
         </div>
 

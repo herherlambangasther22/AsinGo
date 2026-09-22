@@ -91,6 +91,8 @@ export interface StoreSettings {
   footerReceiptMessage: string;
   lowStockThresholdDefault: number;
   currencyPrefix: string;
+  logoUrl?: string;
+  loadingLogoUrl?: string;
 }
 
 export interface AuditLogEntry {
