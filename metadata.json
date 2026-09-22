@@ -1,0 +1,8 @@
+{
+  "name": "AsinGo",
+  "description": "Aplikasi Pemesanan & Manajemen Stok Ikan Asin Real-Time Multi-Device",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

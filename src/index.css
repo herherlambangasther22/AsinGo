@@ -1,0 +1,160 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --sage-950: #0f1c16;
+    --sage-900: #1b2e25;
+    --sage-800: #233e32;
+    --sage-700: #2d4b3e;
+    --sage-600: #385a4a;
+    --sage-500: #46705d;
+    --sage-400: #628e7a;
+    --sage-300: #8eb3a2;
+    --sage-200: #c1d6cc;
+    --sage-100: #e2ede7;
+    --sage-50: #f4f7f5;
+  }
+
+  body {
+    background-color: #f7f9f7;
+    color: #1a2721;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* 
+  Real Tactile Raised Buttons (Timbul Nyata & Tegas)
+  Combines top specular highlight, crisp border boundary, deep foundation shadow, and interactive press depression.
+*/
+.btn-timbul-primary {
+  background: #234334;
+  color: #ffffff;
+  border: 1.5px solid #14281f;
+  border-top-color: #3f6b55;
+  box-shadow: 0 3px 0 0 #12221b, 0 4px 6px -1px rgba(18, 34, 27, 0.35);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+}
+.btn-timbul-primary:hover {
+  background: #2b503f;
+  filter: brightness(1.05);
+}
+.btn-timbul-primary:active {
+  transform: translateY(2.5px);
+  box-shadow: 0 0.5px 0 0 #12221b, 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.btn-timbul-white {
+  background: #ffffff;
+  color: #1b2e25;
+  border: 1.5px solid #a8beae;
+  border-top-color: #ffffff;
+  border-bottom-color: #8fa796;
+  box-shadow: 0 3px 0 0 #8fa796, 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-timbul-white:hover {
+  background: #fbfdfc;
+  border-color: #234334;
+  color: #234334;
+}
+.btn-timbul-white:active {
+  transform: translateY(2.5px);
+  box-shadow: 0 0.5px 0 0 #8fa796, 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.btn-timbul-amber {
+  background: #b45309;
+  color: #ffffff;
+  border: 1.5px solid #78350f;
+  border-top-color: #d97706;
+  box-shadow: 0 3px 0 0 #78350f, 0 4px 6px -1px rgba(120, 53, 15, 0.35);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-timbul-amber:hover {
+  background: #c25e00;
+}
+.btn-timbul-amber:active {
+  transform: translateY(2.5px);
+  box-shadow: 0 0.5px 0 0 #78350f, 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.btn-timbul-danger {
+  background: #be123c;
+  color: #ffffff;
+  border: 1.5px solid #881337;
+  border-top-color: #e11d48;
+  box-shadow: 0 3px 0 0 #881337, 0 4px 6px -1px rgba(136, 19, 55, 0.35);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-timbul-danger:hover {
+  background: #ce1b44;
+}
+.btn-timbul-danger:active {
+  transform: translateY(2.5px);
+  box-shadow: 0 0.5px 0 0 #881337, 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.btn-timbul-wa {
+  background: #15803d;
+  color: #ffffff;
+  border: 1.5px solid #14532d;
+  border-top-color: #22c55e;
+  box-shadow: 0 3px 0 0 #14532d, 0 4px 6px -1px rgba(20, 83, 45, 0.4);
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.btn-timbul-wa:hover {
+  background: #16a34a;
+}
+.btn-timbul-wa:active {
+  transform: translateY(2.5px);
+  box-shadow: 0 0.5px 0 0 #14532d, 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Flat Natural Panels */
+.panel-flat {
+  background-color: #ffffff;
+  border: 1px solid #e2e8e4;
+  border-radius: 1rem;
+}
+
+.panel-flat-muted {
+  background-color: #f4f7f5;
+  border: 1px solid #e2e8e4;
+  border-radius: 0.875rem;
+}
+
+/* Print thermal styling */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 10px;
+    background: white;
+    color: black;
+  }
+}
