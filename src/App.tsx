@@ -26,7 +26,16 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Lock uploaded product images: Upgrade any old unsplash URLs or missing images to the locked permanent default images from INITIAL_PRODUCTS
+          return parsed.map((p: Product) => {
+            const defaultProd = INITIAL_PRODUCTS.find((ip) => ip.id === p.id);
+            if (defaultProd) {
+              if (!p.imageUrl || p.imageUrl.includes('images.unsplash.com') || p.imageUrl.startsWith('data:image')) {
+                return { ...p, imageUrl: defaultProd.imageUrl };
+              }
+            }
+            return p;
+          });
         }
       } catch (e) {
         console.error('Failed to parse cached products:', e);
@@ -89,32 +98,62 @@ export default function App() {
 
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useState<User>(() => {
-    const savedStaff = sessionStorage.getItem('asingo_staff_session') || localStorage.getItem('asingo_staff_session');
-    if (savedStaff) {
-      try {
-        const parsed = JSON.parse(savedStaff);
-        if (parsed && parsed.role && parsed.role !== 'pelanggan') {
-          return parsed;
-        }
-      } catch (e) {}
+    // Only restore staff session if explicitly visiting a staff URL path or hash
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const isExplicitStaff =
+      path.includes('/admin') ||
+      path.includes('/kasir') ||
+      path.includes('/staff') ||
+      path.includes('/gudang') ||
+      hash.includes('admin') ||
+      hash.includes('kasir') ||
+      hash.includes('staff') ||
+      hash.includes('gudang');
+
+    if (isExplicitStaff) {
+      const savedStaff = sessionStorage.getItem('asingo_staff_session');
+      if (savedStaff) {
+        try {
+          const parsed = JSON.parse(savedStaff);
+          if (parsed && parsed.role && parsed.role !== 'pelanggan') {
+            return parsed;
+          }
+        } catch (e) {}
+      }
     }
-    // Default automatically to Pelanggan for all link visitors
+    // WAJIB default ke Pelanggan Toko untuk semua pembeli, pengunjung web, dan deployment Vercel
     return DEFAULT_PELANGGAN;
   });
 
-  // Navigation State - Default to customer catalog or last staff view
+  // Navigation State - WAJIB default ke tampilan pembeli / katalog pelanggan (Customer Catalog View)
   const [currentTab, setCurrentTab] = useState<'pos' | 'stock' | 'daily' | 'analytics' | 'catalog' | 'backup'>(() => {
-    const savedStaff = sessionStorage.getItem('asingo_staff_session') || localStorage.getItem('asingo_staff_session');
-    if (savedStaff) {
-      try {
-        const parsed = JSON.parse(savedStaff);
-        if (parsed && parsed.role && parsed.role !== 'pelanggan') {
-          if (parsed.role === 'owner') return 'analytics';
-          if (parsed.role === 'gudang') return 'stock';
-          return 'pos';
-        }
-      } catch (e) {}
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const isExplicitStaff =
+      path.includes('/admin') ||
+      path.includes('/kasir') ||
+      path.includes('/staff') ||
+      path.includes('/gudang') ||
+      hash.includes('admin') ||
+      hash.includes('kasir') ||
+      hash.includes('staff') ||
+      hash.includes('gudang');
+
+    if (isExplicitStaff) {
+      const savedStaff = sessionStorage.getItem('asingo_staff_session');
+      if (savedStaff) {
+        try {
+          const parsed = JSON.parse(savedStaff);
+          if (parsed && parsed.role && parsed.role !== 'pelanggan') {
+            if (parsed.role === 'owner') return 'analytics';
+            if (parsed.role === 'gudang') return 'stock';
+            return 'pos';
+          }
+        } catch (e) {}
+      }
     }
+    // Default mutlak tampilan pembeli (katalog)
     return 'catalog';
   });
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
