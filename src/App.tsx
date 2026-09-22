@@ -67,7 +67,7 @@ export default function App() {
 
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [currentUser, setCurrentUser] = useState<User>(() => {
-    const savedStaff = sessionStorage.getItem('asingo_staff_session');
+    const savedStaff = sessionStorage.getItem('asingo_staff_session') || localStorage.getItem('asingo_staff_session');
     if (savedStaff) {
       try {
         const parsed = JSON.parse(savedStaff);
@@ -80,13 +80,15 @@ export default function App() {
     return DEFAULT_PELANGGAN;
   });
 
-  // Navigation State - Default to customer catalog
+  // Navigation State - Default to customer catalog or last staff view
   const [currentTab, setCurrentTab] = useState<'pos' | 'stock' | 'daily' | 'analytics' | 'catalog' | 'backup'>(() => {
-    const savedStaff = sessionStorage.getItem('asingo_staff_session');
+    const savedStaff = sessionStorage.getItem('asingo_staff_session') || localStorage.getItem('asingo_staff_session');
     if (savedStaff) {
       try {
         const parsed = JSON.parse(savedStaff);
         if (parsed && parsed.role && parsed.role !== 'pelanggan') {
+          if (parsed.role === 'owner') return 'analytics';
+          if (parsed.role === 'gudang') return 'stock';
           return 'pos';
         }
       } catch (e) {}
@@ -145,10 +147,10 @@ export default function App() {
   const handleRouteSync = useCallback((customUser?: User) => {
     const activeUser = customUser || currentUser;
     const path = window.location.pathname.toLowerCase();
-    const hash = window.location.hash.toLowerCase().replace('#', '');
-    const currentRoute = path !== '/' ? path : hash ? `/${hash}` : '/';
+    const hash = window.location.hash.toLowerCase().replace('#/', '').replace('#', '');
+    const cleanRoute = path !== '/' ? path : hash ? `/${hash}` : '/';
 
-    if (currentRoute === '/admin') {
+    if (cleanRoute === '/admin' || cleanRoute === '/owner') {
       if (activeUser.role === 'owner') {
         if (currentTab === 'catalog') setCurrentTab('analytics');
       } else {
@@ -156,7 +158,7 @@ export default function App() {
         setModalRequestedRoute('/admin');
         setIsUserRoleModalOpen(true);
       }
-    } else if (currentRoute === '/kasir') {
+    } else if (cleanRoute === '/kasir' || cleanRoute === '/pos') {
       if (activeUser.role === 'kasir' || activeUser.role === 'owner') {
         setCurrentTab('pos');
       } else {
@@ -164,7 +166,7 @@ export default function App() {
         setModalRequestedRoute('/kasir');
         setIsUserRoleModalOpen(true);
       }
-    } else if (currentRoute === '/staff' || currentRoute === '/gudang') {
+    } else if (cleanRoute === '/staff' || cleanRoute === '/gudang' || cleanRoute === '/stock') {
       if (activeUser.role === 'gudang' || activeUser.role === 'owner') {
         setCurrentTab('stock');
       } else {
@@ -172,10 +174,32 @@ export default function App() {
         setModalRequestedRoute('/staff');
         setIsUserRoleModalOpen(true);
       }
-    } else if (currentRoute === '/katalog' || currentRoute === '/catalog') {
-      if (activeUser.role === 'pelanggan') {
-        setCurrentTab('catalog');
+    } else if (cleanRoute === '/daily' || cleanRoute === '/laporan') {
+      if (activeUser.role === 'owner' || activeUser.role === 'kasir') {
+        setCurrentTab('daily');
+      } else {
+        setModalInitialRole('owner');
+        setModalRequestedRoute('/daily');
+        setIsUserRoleModalOpen(true);
       }
+    } else if (cleanRoute === '/analytics' || cleanRoute === '/analitik') {
+      if (activeUser.role === 'owner') {
+        setCurrentTab('analytics');
+      } else {
+        setModalInitialRole('owner');
+        setModalRequestedRoute('/analytics');
+        setIsUserRoleModalOpen(true);
+      }
+    } else if (cleanRoute === '/backup' || cleanRoute === '/restore') {
+      if (activeUser.role === 'owner') {
+        setCurrentTab('backup');
+      } else {
+        setModalInitialRole('owner');
+        setModalRequestedRoute('/backup');
+        setIsUserRoleModalOpen(true);
+      }
+    } else if (cleanRoute === '/katalog' || cleanRoute === '/catalog') {
+      setCurrentTab('catalog');
     }
   }, [currentUser, currentTab]);
 
@@ -215,16 +239,19 @@ export default function App() {
   // Connect to Server & SSE Stream for Real-time synchronization
   const refreshAllData = () => {
     fetch('/api/state')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.products) setProducts(data.products);
-        if (data.orders) setOrders(data.orders);
-        if (data.stockLogs) setStockLogs(data.stockLogs);
-        if (data.settings) setSettings(data.settings);
-        if (data.users) setUsers(data.users);
+      .then((res) => {
+        if (!res.ok) throw new Error('API not available');
+        return res.json();
       })
-      .catch((err) => {
-        console.log('Running in client-first / offline fallback mode:', err);
+      .then((data) => {
+        if (data.products && Array.isArray(data.products) && data.products.length > 0) setProducts(data.products);
+        if (data.orders && Array.isArray(data.orders)) setOrders(data.orders);
+        if (data.stockLogs && Array.isArray(data.stockLogs)) setStockLogs(data.stockLogs);
+        if (data.settings) setSettings(data.settings);
+        if (data.users && Array.isArray(data.users)) setUsers(data.users);
+      })
+      .catch(() => {
+        // Fallback silently to client-side localStorage state (essential for Vercel & offline)
       });
   };
 
@@ -232,7 +259,7 @@ export default function App() {
     // 1. Initial State Fetch
     refreshAllData();
 
-    // 2. Real-Time Server-Sent Events (SSE)
+    // 2. Real-Time Server-Sent Events (SSE) with graceful offline fallback
     let eventSource: EventSource | null = null;
 
     try {
@@ -255,8 +282,8 @@ export default function App() {
       eventSource.onerror = () => {
         setIsRealtimeConnected(false);
       };
-    } catch (e) {
-      console.warn('SSE not supported or failed to connect:', e);
+    } catch {
+      setIsRealtimeConnected(false);
     }
 
     return () => {
@@ -515,11 +542,14 @@ export default function App() {
     if (user.role === 'pelanggan') {
       setCurrentTab('catalog');
       sessionStorage.removeItem('asingo_staff_session');
+      localStorage.removeItem('asingo_staff_session');
       if (window.history.pushState) {
         window.history.pushState({}, '', '/');
       }
     } else {
-      sessionStorage.setItem('asingo_staff_session', JSON.stringify(user));
+      const userStr = JSON.stringify(user);
+      sessionStorage.setItem('asingo_staff_session', userStr);
+      localStorage.setItem('asingo_staff_session', userStr);
       let nextTab = redirectTab;
       if (!nextTab) {
         if (user.role === 'owner') nextTab = 'analytics';
