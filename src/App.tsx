@@ -18,6 +18,7 @@ import { BackupRestoreView } from './components/BackupRestoreView';
 import { LoadingScreen } from './components/LoadingScreen';
 import { CheckCircle, AlertTriangle, Info, Bell, X } from 'lucide-react';
 import { playCashierChime, playSuccessSound } from './lib/audioSound';
+import { buildApiUrl } from './lib/apiConfig';
 
 export default function App() {
   // Primary States
@@ -318,8 +319,8 @@ export default function App() {
   }, [settings]);
 
   // Connect to Server & SSE Stream for Real-time synchronization
-  const refreshAllData = () => {
-    fetch('/api/state')
+  const refreshAllData = useCallback(() => {
+    fetch(buildApiUrl('/api/state'))
       .then((res) => {
         if (!res.ok) throw new Error('API not available');
         return res.json();
@@ -339,7 +340,7 @@ export default function App() {
           setIsAppLoading(false);
         }, 1200);
       });
-  };
+  }, []);
 
   // Graceful safety timer for loading screen finish
   useEffect(() => {
@@ -353,39 +354,88 @@ export default function App() {
     // 1. Initial State Fetch
     refreshAllData();
 
-    // 2. Real-Time Server-Sent Events (SSE) with graceful offline fallback
+    // 2. Real-Time Server-Sent Events (SSE) with auto-reconnect & cross-device support
     let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+    let isComponentMounted = true;
 
-    try {
-      eventSource = new EventSource('/api/events');
-      sseRef.current = eventSource;
+    const connectSSE = () => {
+      if (!isComponentMounted) return;
+      try {
+        const sseUrl = buildApiUrl('/api/events');
+        eventSource = new EventSource(sseUrl);
+        sseRef.current = eventSource;
 
-      eventSource.onopen = () => {
-        setIsRealtimeConnected(true);
-      };
+        eventSource.onopen = () => {
+          if (isComponentMounted) setIsRealtimeConnected(true);
+        };
 
-      eventSource.onmessage = (event) => {
-        try {
-          const msg: RealtimeMessage = JSON.parse(event.data);
-          handleRealtimeMessage(msg);
-        } catch (e) {
-          console.error('SSE JSON parse error:', e);
+        eventSource.onmessage = (event) => {
+          try {
+            const msg: RealtimeMessage = JSON.parse(event.data);
+            handleRealtimeMessage(msg);
+          } catch (e) {
+            console.error('SSE JSON parse error:', e);
+          }
+        };
+
+        eventSource.onerror = () => {
+          if (isComponentMounted) {
+            setIsRealtimeConnected(false);
+            if (eventSource) {
+              eventSource.close();
+              eventSource = null;
+            }
+            // Auto reconnect after 4 seconds (tahan banting di multi-perangkat)
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = setTimeout(() => {
+              if (isComponentMounted) connectSSE();
+            }, 4000);
+          }
+        };
+      } catch {
+        if (isComponentMounted) {
+          setIsRealtimeConnected(false);
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = setTimeout(() => {
+            if (isComponentMounted) connectSSE();
+          }, 6000);
         }
-      };
+      }
+    };
 
-      eventSource.onerror = () => {
-        setIsRealtimeConnected(false);
-      };
-    } catch {
-      setIsRealtimeConnected(false);
-    }
+    connectSSE();
+
+    // 3. Fallback Periodic Polling (every 10 seconds):
+    // Memastikan jika browser mobile menutup tab/sleep lalu bangun, atau koneksi terputus,
+    // order baru dari pelanggan atau konfirmasi kasir tetap tersinkronisasi 100%.
+    const pollingInterval = setInterval(() => {
+      refreshAllData();
+    }, 10000);
+
+    // 4. Auto sync immediately when user switches back to this browser tab/window
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshAllData();
+        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
+          connectSSE();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onVisibilityChange);
 
     return () => {
+      isComponentMounted = false;
+      clearInterval(pollingInterval);
+      clearTimeout(reconnectTimeout);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onVisibilityChange);
       if (eventSource) {
         eventSource.close();
       }
     };
-  }, []);
+  }, [refreshAllData]);
 
   // Pending Web Orders Count waiting for Cashier confirmation
   const pendingWebOrdersCount = orders.filter(
@@ -503,7 +553,7 @@ export default function App() {
 
     // 2. Send to Server for live broadcast and permanent disk persistence
     try {
-      const res = await fetch(`/api/products/${productId}/image`, {
+      const res = await fetch(buildApiUrl(`/api/products/${productId}/image`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageUrl: newImageUrl, updatedBy: currentUser.name }),
@@ -542,7 +592,7 @@ export default function App() {
 
     // 2. Server API
     try {
-      await fetch(`/api/products/${productId}/stock`, {
+      await fetch(buildApiUrl(`/api/products/${productId}/stock`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ changeKg, type, note, updatedBy: currentUser.name }),
@@ -554,7 +604,7 @@ export default function App() {
 
   const handleSaveProduct = async (productData: Partial<Product>) => {
     try {
-      const res = await fetch('/api/products', {
+      const res = await fetch(buildApiUrl('/api/products'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productData),
@@ -594,7 +644,7 @@ export default function App() {
   const handleDeleteProduct = async (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
     try {
-      await fetch(`/api/products/${productId}`, { method: 'DELETE' });
+      await fetch(buildApiUrl(`/api/products/${productId}`), { method: 'DELETE' });
     } catch (e) {
       console.warn(e);
     }
@@ -615,7 +665,7 @@ export default function App() {
     };
 
     try {
-      const res = await fetch('/api/orders', {
+      const res = await fetch(buildApiUrl('/api/orders'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newOrder),
@@ -676,7 +726,7 @@ export default function App() {
     }
   ): Promise<Order | null> => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/confirm-payment`, {
+      const res = await fetch(buildApiUrl(`/api/orders/${orderId}/confirm-payment`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -742,7 +792,7 @@ export default function App() {
 
   const handleCancelOrder = async (orderId: string, reason?: string): Promise<boolean> => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/cancel`, {
+      const res = await fetch(buildApiUrl(`/api/orders/${orderId}/cancel`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -783,7 +833,7 @@ export default function App() {
     const merged = { ...settings, ...newSettings };
     setSettings(merged);
     try {
-      const res = await fetch('/api/settings', {
+      const res = await fetch(buildApiUrl('/api/settings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(merged),

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { StoreSettings } from '../types';
+import { setCustomApiUrl, getBaseApiUrl } from '../lib/apiConfig';
 import {
   X,
   Settings,
@@ -14,6 +15,10 @@ import {
   Eye,
   CheckCircle2,
   Layers,
+  Wifi,
+  Globe,
+  Server,
+  Radio,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -31,7 +36,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onSaveSettings,
   onTriggerLoadingPreview,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'logo'>('logo');
+  const [activeTab, setActiveTab] = useState<'profile' | 'logo' | 'network'>('logo');
+  const [customApiUrl, setCustomApiUrlState] = useState<string>(() => {
+    try {
+      return localStorage.getItem('asingo_custom_api_url') || '';
+    } catch {
+      return '';
+    }
+  });
   const [formData, setFormData] = useState<StoreSettings>({
     ...settings,
     logoUrl: settings.logoUrl || '/logo.svg',
@@ -124,6 +136,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     e.preventDefault();
     setIsSaving(true);
     try {
+      // Simpan URL API kustom jika diubah (untuk integrasi Vercel ke Server Sentral)
+      setCustomApiUrl(customApiUrl);
+
       const finalPayload: Partial<StoreSettings> = {
         ...formData,
         loadingLogoUrl: syncLoadingLogo ? formData.logoUrl : formData.loadingLogoUrl,
@@ -190,6 +205,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <Store className="w-4 h-4 text-emerald-600" />
             <span>Profil Toko &amp; WhatsApp</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('network')}
+            className={`px-4 py-2 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 ${
+              activeTab === 'network'
+                ? 'bg-white text-[#1B2E25] shadow-xs'
+                : 'text-gray-300 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Wifi className="w-4 h-4 text-emerald-500" />
+            <span>Multi-Perangkat &amp; Real-time</span>
           </button>
         </div>
 
@@ -550,6 +577,78 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     placeholder="Terima kasih telah berbelanja di AsinGo! Simpan di tempat kering."
                     className="w-full px-3 py-2 text-xs bg-[#F8FAF9] border border-gray-300 rounded-xl focus:outline-none focus:border-[#2D4B3E]"
                   />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: MULTI-PERANGKAT & REAL-TIME SINKRONISASI */}
+          {activeTab === 'network' && (
+            <div className="space-y-4">
+              <div className="bg-[#1B2E25] p-4 rounded-2xl border border-emerald-800 text-white space-y-2">
+                <div className="flex items-center gap-2">
+                  <Wifi className="w-5 h-5 text-emerald-400" />
+                  <h4 className="font-black text-sm text-white">Akses Real-time Antar Perangkat &amp; Jaringan</h4>
+                </div>
+                <p className="text-xs text-emerald-200 leading-relaxed">
+                  Web AsinGo dirancang bekerja sinkron di berbagai perangkat (HP Pembeli, Tablet Kasir, Laptop Admin, PC Gudang) baik di jaringan Wi-Fi toko maupun internet publik (termasuk hosting Vercel).
+                </p>
+              </div>
+
+              {/* Server URL Configuration Card */}
+              <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Server className="w-4 h-4 text-emerald-700" />
+                    <h5 className="font-bold text-xs text-gray-900">Alamat Backend / Endpoint Sentral</h5>
+                  </div>
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                    {getBaseApiUrl() ? 'Terkoneksi Sentral' : 'Satu Domain (Default)'}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  Jika web di-deploy di <strong>Vercel</strong> secara statis dan Anda memiliki server Node.js aktif di cloud / IP publik, masukkan URL backend di bawah agar HP pembeli dan kasir otomatis terhubung ke database yang sama:
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-700 block">
+                    URL API Backend (Kosongkan jika berjalan di server yang sama):
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Globe className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        id="setting-custom-api-url"
+                        type="url"
+                        value={customApiUrl}
+                        onChange={(e) => setCustomApiUrlState(e.target.value)}
+                        placeholder="Contoh: https://api-asingo.domainanda.com atau kosongkan"
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-[#F8FAF9] border border-gray-300 rounded-xl focus:outline-none focus:border-[#2D4B3E] font-mono"
+                      />
+                    </div>
+                    {customApiUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomApiUrlState('')}
+                        className="px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-xl border border-red-200"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5 text-[11px] text-gray-600">
+                  <div className="font-bold text-gray-800 flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                    <span>Mode Sinkronisasi Aktif:</span>
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 pl-1">
+                    <li><strong>Server-Sent Events (SSE)</strong>: Pembaruan instan otomatis &lt; 1 detik saat ada orderan masuk atau stok berubah.</li>
+                    <li><strong>Multi-Device Auto Reconnect</strong>: Jika jaringan terputus atau layar HP mati, sistem otomatis tersambung kembali saat aktif.</li>
+                    <li><strong>Smart Polling Fallback</strong>: Otomatis mengecek perubahan berkala memastikan tidak ada order yang terlewat.</li>
+                  </ul>
                 </div>
               </div>
             </div>

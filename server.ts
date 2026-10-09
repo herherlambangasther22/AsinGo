@@ -424,6 +424,17 @@ async function startServer() {
   app.use(express.json({ limit: '25mb' }));
   app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+  // Cross-Origin Resource Sharing (CORS) for multi-device & Vercel cross-network access
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Static uploads directory for permanent product & logo images
   const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
   if (!fs.existsSync(UPLOADS_DIR)) {
@@ -1087,6 +1098,21 @@ async function startServer() {
       res.sendFile(MASTER_DB_FILE);
     } catch (err: any) {
       res.status(500).json({ error: 'Gagal mengunduh master database', details: err.message });
+    }
+  });
+
+  // Download Comprehensive Skripsi PDF Document
+  app.get('/api/download-skripsi-pdf', (req, res) => {
+    try {
+      const pdfPath = path.join(process.cwd(), 'public', 'Informasi_Aplikasi_AsinGo_Skripsi.pdf');
+      if (!fs.existsSync(pdfPath)) {
+        return res.status(404).json({ error: 'Berkas PDF belum selesai dibuat di server' });
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="Informasi_Lengkap_Aplikasi_AsinGo_Skripsi.pdf"');
+      res.sendFile(pdfPath);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Gagal mengunduh berkas PDF', details: err.message });
     }
   });
 

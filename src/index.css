@@ -24,106 +24,94 @@
 }
 
 /* 
-  Real Tactile Raised Buttons (Timbul Nyata & Tegas)
-  Combines top specular highlight, crisp border boundary, deep foundation shadow, and interactive press depression.
+  Modern Flat Buttons - Bersih, Elegan, Natural & Proporsional
+  Tanpa efek timbul berlebihan, bayangan tebal, atau kesan buatan (anti-skauemorphism).
 */
 .btn-timbul-primary {
-  background: #234334;
+  background-color: #234334;
   color: #ffffff;
-  border: 1.5px solid #14281f;
-  border-top-color: #3f6b55;
-  box-shadow: 0 3px 0 0 #12221b, 0 4px 6px -1px rgba(18, 34, 27, 0.35);
-  font-weight: 700;
+  border: 1px solid #1a3227;
+  box-shadow: none;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.08s ease;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
 }
 .btn-timbul-primary:hover {
-  background: #2b503f;
-  filter: brightness(1.05);
+  background-color: #2d5542;
 }
 .btn-timbul-primary:active {
-  transform: translateY(2.5px);
-  box-shadow: 0 0.5px 0 0 #12221b, 0 1px 2px rgba(0, 0, 0, 0.2);
+  background-color: #1a3227;
 }
 
 .btn-timbul-white {
-  background: #ffffff;
+  background-color: #ffffff;
   color: #1b2e25;
-  border: 1.5px solid #a8beae;
-  border-top-color: #ffffff;
-  border-bottom-color: #8fa796;
-  box-shadow: 0 3px 0 0 #8fa796, 0 4px 6px -1px rgba(0, 0, 0, 0.08);
-  font-weight: 700;
+  border: 1px solid #d1ded6;
+  box-shadow: none;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 .btn-timbul-white:hover {
-  background: #fbfdfc;
+  background-color: #f7faf8;
   border-color: #234334;
   color: #234334;
 }
 .btn-timbul-white:active {
-  transform: translateY(2.5px);
-  box-shadow: 0 0.5px 0 0 #8fa796, 0 1px 2px rgba(0, 0, 0, 0.1);
+  background-color: #edf3f0;
 }
 
 .btn-timbul-amber {
-  background: #b45309;
+  background-color: #d97706;
   color: #ffffff;
-  border: 1.5px solid #78350f;
-  border-top-color: #d97706;
-  box-shadow: 0 3px 0 0 #78350f, 0 4px 6px -1px rgba(120, 53, 15, 0.35);
-  font-weight: 700;
+  border: 1px solid #b45309;
+  box-shadow: none;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: background-color 0.15s ease;
 }
 .btn-timbul-amber:hover {
-  background: #c25e00;
+  background-color: #b45309;
 }
 .btn-timbul-amber:active {
-  transform: translateY(2.5px);
-  box-shadow: 0 0.5px 0 0 #78350f, 0 1px 2px rgba(0, 0, 0, 0.2);
+  background-color: #92400e;
 }
 
 .btn-timbul-danger {
-  background: #be123c;
+  background-color: #e11d48;
   color: #ffffff;
-  border: 1.5px solid #881337;
-  border-top-color: #e11d48;
-  box-shadow: 0 3px 0 0 #881337, 0 4px 6px -1px rgba(136, 19, 55, 0.35);
-  font-weight: 700;
+  border: 1px solid #be123c;
+  box-shadow: none;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: background-color 0.15s ease;
 }
 .btn-timbul-danger:hover {
-  background: #ce1b44;
+  background-color: #be123c;
 }
 .btn-timbul-danger:active {
-  transform: translateY(2.5px);
-  box-shadow: 0 0.5px 0 0 #881337, 0 1px 2px rgba(0, 0, 0, 0.2);
+  background-color: #9f1239;
 }
 
 .btn-timbul-wa {
-  background: #15803d;
+  background-color: #16a34a;
   color: #ffffff;
-  border: 1.5px solid #14532d;
-  border-top-color: #22c55e;
-  box-shadow: 0 3px 0 0 #14532d, 0 4px 6px -1px rgba(20, 83, 45, 0.4);
-  font-weight: 700;
+  border: 1px solid #15803d;
+  box-shadow: none;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
-  transition: transform 0.08s ease, box-shadow 0.08s ease;
+  transition: background-color 0.15s ease;
 }
 .btn-timbul-wa:hover {
-  background: #16a34a;
+  background-color: #15803d;
 }
 .btn-timbul-wa:active {
-  transform: translateY(2.5px);
-  box-shadow: 0 0.5px 0 0 #14532d, 0 1px 2px rgba(0, 0, 0, 0.2);
+  background-color: #166534;
 }
 
 /* Flat Natural Panels */

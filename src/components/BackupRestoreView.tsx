@@ -16,7 +16,7 @@ import {
   KeyRound,
   FileCheck,
   Server,
-  Zap,
+  DatabaseBackup,
   Folder,
   FolderTree,
   FileText,
@@ -33,6 +33,7 @@ import {
   AuditLogEntry,
   DatabaseSecurityStatus,
 } from '../types';
+import { buildApiUrl } from '../lib/apiConfig';
 
 interface BackupRestoreViewProps {
   currentUser: User;
@@ -95,9 +96,9 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
     try {
       setLoading(true);
       const [resBackups, resStatus, resLogs] = await Promise.all([
-        fetch('/api/backups').catch(() => null),
-        fetch('/api/database/status').catch(() => null),
-        fetch('/api/database/audit-logs').catch(() => null),
+        fetch(buildApiUrl('/api/backups')).catch(() => null),
+        fetch(buildApiUrl('/api/database/status')).catch(() => null),
+        fetch(buildApiUrl('/api/database/audit-logs')).catch(() => null),
       ]);
 
       if (resBackups && resBackups.ok) {
@@ -162,7 +163,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
     // Listen for realtime SSE events with fallback
     let eventSource: EventSource | null = null;
     try {
-      eventSource = new EventSource('/api/events');
+      eventSource = new EventSource(buildApiUrl('/api/events'));
       eventSource.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -189,7 +190,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
   const handleCreateManualBackup = async () => {
     try {
       setActionLoading('create');
-      const res = await fetch('/api/backups/create', {
+      const res = await fetch(buildApiUrl('/api/backups/create'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -219,7 +220,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
   };
 
   const handleDownloadBackup = (filename: string) => {
-    window.open(`/api/backups/download/${encodeURIComponent(filename)}`, '_blank');
+    window.open(buildApiUrl(`/api/backups/download/${encodeURIComponent(filename)}`), '_blank');
     showToast(`Mengunduh file snapshot: ${filename}`, 'info');
   };
 
@@ -251,7 +252,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
   const handleVerifyIntegrity = async () => {
     try {
       setActionLoading('verify-integrity');
-      const res = await fetch('/api/database/verify-integrity', { method: 'POST' });
+      const res = await fetch(buildApiUrl('/api/database/verify-integrity'), { method: 'POST' });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Gagal verifikasi');
 
@@ -275,7 +276,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
       setActionLoading(`restore-${restoreModalBackup.filename}`);
       setRestorePinError('');
 
-      const res = await fetch(`/api/backups/restore/${encodeURIComponent(restoreModalBackup.filename)}`, {
+      const res = await fetch(buildApiUrl(`/api/backups/restore/${encodeURIComponent(restoreModalBackup.filename)}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -337,7 +338,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
         throw new Error('PIN Admin tidak valid (PIN: 1234)');
       }
 
-      const res = await fetch('/api/backups/upload-restore', {
+      const res = await fetch(buildApiUrl('/api/backups/upload-restore'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -397,7 +398,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
 
     try {
       setActionLoading(`delete-${deleteModalBackup.filename}`);
-      const res = await fetch(`/api/backups/${encodeURIComponent(deleteModalBackup.filename)}`, {
+      const res = await fetch(buildApiUrl(`/api/backups/${encodeURIComponent(deleteModalBackup.filename)}`), {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -449,35 +450,29 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
         >
           {toastMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />}
           {toastMessage.type === 'error' && <AlertTriangle className="w-5 h-5 text-rose-200 shrink-0" />}
-          {toastMessage.type === 'info' && <Database className="w-5 h-5 text-[#E6A635] shrink-0" />}
+          {toastMessage.type === 'info' && <Database className="w-5 h-5 text-emerald-400 shrink-0" />}
           <span>{toastMessage.text}</span>
         </div>
       )}
 
       {/* Official Database Master Banner */}
-      <div className="bg-gradient-to-r from-[#14231C] via-[#1B2E25] to-[#14231C] p-6 md:p-8 rounded-3xl text-white shadow-xl border border-[#2d4b3e] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#E6A635]/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
-
+      <div className="bg-[#1B2E25] p-6 md:p-8 rounded-3xl text-white shadow-xl border border-[#2d4b3e] relative overflow-hidden">
         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/90 border border-emerald-400/40 text-emerald-300 text-xs font-bold tracking-wide">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                <span>DIREKTORI BASIS DATA RESMI &amp; TERENKRIPSI</span>
-              </div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#E6A635]/20 border border-[#E6A635]/40 text-[#E6A635] text-xs font-mono font-bold">
-                <Folder className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-bold">
+                <Folder className="w-3.5 h-3.5 text-emerald-400" />
                 <span>data/database/</span>
               </div>
             </div>
 
             <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-3">
-              <Database className="w-8 h-8 text-[#E6A635]" />
+              <Database className="w-8 h-8 text-emerald-400" />
               <span>Pusat Database &amp; Keamanan Tingkat Tinggi</span>
             </h1>
 
             <p className="text-gray-300 text-sm leading-relaxed">
-              Seluruh basis data aktif, snapshot backup per 5 menit, dan log audit keamanan tersimpan di folder khusus <code className="text-[#E6A635] font-mono font-bold bg-black/40 px-2 py-0.5 rounded border border-white/10">data/database/</code> dengan proteksi atomik, tanda tangan kriptografi SHA-256, dan perlindungan anti-tamper.
+              Seluruh basis data aktif, snapshot backup per 5 menit, dan log audit keamanan tersimpan di folder khusus <code className="text-emerald-300 font-mono font-bold bg-black/40 px-2 py-0.5 rounded border border-emerald-500/20">data/database/</code> dengan proteksi atomik, tanda tangan kriptografi SHA-256, dan perlindungan anti-tamper.
             </p>
           </div>
 
@@ -488,9 +483,9 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               type="button"
               onClick={handleCreateManualBackup}
               disabled={actionLoading === 'create'}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#E6A635] hover:bg-[#d4972c] active:scale-95 text-[#1B2E25] font-black text-sm shadow-md transition-all cursor-pointer disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-sm shadow-md transition-all cursor-pointer disabled:opacity-50"
             >
-              <Zap className={`w-4 h-4 ${actionLoading === 'create' ? 'animate-spin' : ''}`} />
+              <DatabaseBackup className={`w-4 h-4 ${actionLoading === 'create' ? 'animate-spin' : ''}`} />
               <span>{actionLoading === 'create' ? 'Mencadangkan...' : 'Cadangkan Sekarang'}</span>
             </button>
 
@@ -511,7 +506,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               onClick={() => fileInputRef.current?.click()}
               className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 active:scale-95 border border-white/20 text-white font-bold text-sm transition-all cursor-pointer"
             >
-              <Upload className="w-4 h-4 text-[#E6A635]" />
+              <Upload className="w-4 h-4 text-emerald-400" />
               <span>Upload JSON</span>
             </button>
             <input
@@ -530,7 +525,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
               title="Perbarui status data database"
               className="p-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all cursor-pointer"
             >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#E6A635]' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-emerald-400' : ''}`} />
             </button>
           </div>
         </div>
@@ -564,7 +559,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
 
           <div className="bg-black/30 backdrop-blur-xs p-3.5 rounded-2xl border border-white/10">
             <div className="text-gray-400 font-medium flex items-center gap-1.5 mb-1">
-              <HardDrive className="w-3.5 h-3.5 text-[#E6A635]" />
+              <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
               <span>Total File Snapshot</span>
             </div>
             <div className="text-xl font-black text-white">{backups.length} File</div>
@@ -776,7 +771,7 @@ export const BackupRestoreView: React.FC<BackupRestoreViewProps> = ({
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                              <Zap className="w-3 h-3" />
+                              <DatabaseBackup className="w-3 h-3" />
                               Manual Admin
                             </span>
                           )}
