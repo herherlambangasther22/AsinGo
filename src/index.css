@@ -127,8 +127,18 @@
   border-radius: 0.875rem;
 }
 
-/* Print thermal styling */
+/* Authentic Thermal Receipt 58mm/80mm Standard (Indomaret / Alfamart Style) */
 @media print {
+  @page {
+    size: 78mm auto;
+    margin: 0;
+  }
+  html, body {
+    width: 78mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
   body * {
     visibility: hidden;
   }
@@ -139,10 +149,16 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 10px;
-    background: white;
-    color: black;
+    width: 76mm !important;
+    max-width: 76mm !important;
+    margin: 0 auto !important;
+    padding: 4mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    font-family: 'Courier New', Courier, monospace, system-ui;
+    font-size: 9.5pt !important;
+    line-height: 1.25 !important;
   }
 }

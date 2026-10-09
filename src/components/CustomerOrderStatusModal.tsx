@@ -15,7 +15,6 @@ import {
   Smartphone,
   Banknote,
   MapPin,
-  Sparkles,
 } from 'lucide-react';
 
 interface CustomerOrderStatusModalProps {

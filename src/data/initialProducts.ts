@@ -9,8 +9,8 @@ export const INITIAL_SETTINGS: StoreSettings = {
   footerReceiptMessage: 'Terima kasih telah berbelanja di AsinGo! Simpan di tempat kering dan sejuk.',
   lowStockThresholdDefault: 5, // 5 kg
   currencyPrefix: 'Rp',
-  logoUrl: '/uploads/logo-1790060389221.png',
-  loadingLogoUrl: '/uploads/loading-logo-1790060389226.png',
+  logoUrl: '/logo.png',
+  loadingLogoUrl: '/logo.png',
   bankAccounts: [
     { bankName: 'BCA', accountNumber: '883-0512-990', accountHolder: 'AsinGo Official' },
     { bankName: 'Mandiri', accountNumber: '142-00-1928374-1', accountHolder: 'AsinGo Official' },

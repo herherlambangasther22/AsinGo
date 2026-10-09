@@ -12,7 +12,6 @@ import {
   X,
   ChevronRight,
   ArrowRight,
-  Sparkles,
   MapPin,
   User,
   Phone,

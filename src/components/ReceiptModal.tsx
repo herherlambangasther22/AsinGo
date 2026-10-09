@@ -47,107 +47,131 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </button>
         </div>
 
-        {/* Receipt Printable Area */}
-        <div className="p-6 overflow-y-auto flex-1 bg-[#FAFAF8]">
+        {/* Receipt Printable Area - Authentic 58mm/80mm Minimarket Format */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[#F0F2F1] flex justify-center">
           <div
             id="printable-receipt"
-            className="bg-white p-5 border border-dashed border-gray-300 rounded-xl shadow-xs font-mono text-xs text-gray-800 space-y-3"
+            className="w-full max-w-[340px] bg-white px-4 py-5 border border-dashed border-gray-300 shadow-sm font-mono text-[11px] leading-tight text-gray-900 space-y-2.5 selection:bg-gray-200"
           >
             {/* Store Header */}
-            <div className="text-center border-b border-dashed border-gray-400 pb-3 flex flex-col items-center">
-              <div className="w-10 h-10 mb-1.5 p-1 bg-white rounded-lg border border-[#2D4B3E]/30 flex items-center justify-center">
+            <div className="text-center border-b border-dashed border-gray-400 pb-2.5 flex flex-col items-center">
+              <div className="w-12 h-12 mb-1 p-1 bg-white rounded-md flex items-center justify-center overflow-hidden">
                 <img
-                  src={settings.logoUrl || '/logo.svg'}
+                  src={settings.logoUrl || '/logo.png'}
                   alt={settings.storeName}
                   className="w-full h-full object-contain"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = '/logo.svg';
+                    const img = e.currentTarget;
+                    if (img.src.includes('logo.png')) {
+                      img.src = '/logo-default.png';
+                    } else if (img.src.includes('logo-default.png')) {
+                      img.src = '/logo.svg';
+                    } else {
+                      img.style.display = 'none';
+                    }
                   }}
                 />
               </div>
-              <h2 className="font-bold text-base text-[#1b2e25] tracking-wider uppercase">{settings.storeName}</h2>
-              <p className="text-[11px] text-gray-600">{settings.tagline}</p>
-              <p className="text-[10px] text-gray-500 mt-0.5">{settings.address}</p>
-              <p className="text-[10px] text-gray-500">Telp/WA: {settings.phone}</p>
+              <h2 className="font-black text-sm text-black tracking-widest uppercase">{settings.storeName}</h2>
+              <p className="text-[10px] text-gray-700">{settings.tagline}</p>
+              <p className="text-[9.5px] text-gray-600 mt-0.5">{settings.address}</p>
+              <p className="text-[9.5px] text-gray-600">Telp/WA: {settings.phone}</p>
             </div>
 
-            {/* Meta */}
-            <div className="text-[11px] space-y-0.5 border-b border-dashed border-gray-300 pb-2">
+            {/* Meta Transaction */}
+            <div className="text-[10px] space-y-0.5 border-b border-dashed border-gray-300 pb-2">
               <div className="flex justify-between">
-                <span>No. Nota:</span>
+                <span>NO. NOTA</span>
                 <span className="font-bold">{order.invoiceNumber}</span>
               </div>
               <div className="flex justify-between">
-                <span>Tanggal:</span>
+                <span>TANGGAL</span>
                 <span>{formatDateTimeIndo(order.createdAt)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Kasir:</span>
-                <span>{order.cashierName}</span>
+                <span>KASIR</span>
+                <span className="uppercase">{order.cashierName}</span>
               </div>
               <div className="flex justify-between">
-                <span>Pelanggan:</span>
-                <span className="font-semibold">{order.customerName} {order.customerPhone ? `(${order.customerPhone})` : ''}</span>
+                <span>PELANGGAN</span>
+                <span className="font-semibold truncate max-w-[170px] text-right">
+                  {order.customerName} {order.customerPhone ? `(${order.customerPhone})` : ''}
+                </span>
               </div>
             </div>
 
-            {/* Items */}
-            <div className="space-y-1.5 border-b border-dashed border-gray-300 pb-2.5">
+            {/* Divider */}
+            <div className="text-gray-400 text-center text-[10px] tracking-widest select-none -my-1">
+              ================================
+            </div>
+
+            {/* Items Purchased */}
+            <div className="space-y-1.5 border-b border-dashed border-gray-300 pb-2.5 text-[10.5px]">
               {order.items.map((item, idx) => (
-                <div key={idx}>
-                  <div className="font-bold text-[11px] text-gray-900">{item.productName}</div>
-                  <div className="flex justify-between text-gray-600 pl-2">
-                    <span>{item.quantityKg} kg × {formatRupiah(item.pricePerKg)}</span>
-                    <span className="font-semibold text-gray-900">{formatRupiah(item.subtotal)}</span>
+                <div key={idx} className="space-y-0.5">
+                  <div className="font-bold text-black">{item.productName}</div>
+                  <div className="flex justify-between text-gray-700 pl-1">
+                    <span>
+                      {item.quantityKg} kg × {formatRupiah(item.pricePerKg)}
+                    </span>
+                    <span className="font-bold text-black">{formatRupiah(item.subtotal)}</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* Totals */}
-            <div className="space-y-1 text-[11px] pt-1 border-b border-dashed border-gray-300 pb-2">
+            {/* Totals & Payments */}
+            <div className="space-y-1 text-[10.5px] border-b border-dashed border-gray-300 pb-2">
               <div className="flex justify-between">
-                <span>Subtotal:</span>
+                <span>SUBTOTAL</span>
                 <span>{formatRupiah(order.subtotal)}</span>
               </div>
               {order.discount > 0 && (
-                <div className="flex justify-between text-red-600">
-                  <span>Diskon:</span>
+                <div className="flex justify-between text-red-600 font-bold">
+                  <span>DISKON</span>
                   <span>-{formatRupiah(order.discount)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-sm text-[#1b2e25] pt-1">
-                <span>TOTAL:</span>
+              <div className="flex justify-between font-black text-xs text-black pt-1 border-t border-dashed border-gray-300">
+                <span>TOTAL HARGA</span>
                 <span>{formatRupiah(order.finalTotal)}</span>
               </div>
-              <div className="flex justify-between text-gray-600 pt-0.5">
-                <span>Metode Bayar:</span>
-                <span className="uppercase font-semibold">{order.paymentChannel ? `${order.paymentChannel} (${order.paymentMethod.toUpperCase()})` : order.paymentMethod.toUpperCase()} (LUNAS)</span>
+              <div className="flex justify-between text-gray-700 pt-0.5">
+                <span>METODE</span>
+                <span className="uppercase font-bold text-black">
+                  {order.paymentChannel ? `${order.paymentChannel} (${order.paymentMethod.toUpperCase()})` : order.paymentMethod.toUpperCase()}
+                </span>
               </div>
-              {order.confirmedBy && (
-                <div className="flex justify-between text-gray-600 pt-0.5">
-                  <span>Disahkan Kasir:</span>
-                  <span className="font-semibold text-gray-900">{order.confirmedBy}</span>
-                </div>
-              )}
+              <div className="flex justify-between text-gray-700">
+                <span>STATUS</span>
+                <span className="font-bold text-emerald-700 uppercase">LUNAS</span>
+              </div>
               {order.cashGiven !== undefined && order.cashGiven > 0 && (
                 <>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Uang Diterima:</span>
+                  <div className="flex justify-between text-gray-700 pt-0.5">
+                    <span>TUNAI DITERIMA</span>
                     <span>{formatRupiah(order.cashGiven)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Kembali:</span>
-                    <span className="font-bold">{formatRupiah(order.change || 0)}</span>
+                  <div className="flex justify-between font-bold text-black">
+                    <span>KEMBALIAN</span>
+                    <span>{formatRupiah(order.change || 0)}</span>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Footer Notice */}
-            <div className="text-center pt-2 text-[10px] text-gray-500 space-y-0.5">
-              <p>{settings.footerReceiptMessage}</p>
-              <p className="font-bold text-[#1b2e25]">Terima Kasih Atas Kunjungan Anda!</p>
+            {/* Retail Receipt Footer Notice */}
+            <div className="text-center pt-1.5 text-[9.5px] text-gray-600 space-y-1">
+              <p className="leading-tight">{settings.footerReceiptMessage}</p>
+              <div className="text-gray-400 text-center tracking-widest select-none">
+                --------------------------------
+              </div>
+              <p className="font-bold text-black tracking-wide uppercase">
+                *** TERIMA KASIH ATAS KUNJUNGAN ANDA ***
+              </p>
+              <p className="text-[8.5px] text-gray-500">
+                Layanan Pelanggan WA: {settings.phone}
+              </p>
             </div>
           </div>
         </div>

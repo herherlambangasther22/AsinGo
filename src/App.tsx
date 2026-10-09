@@ -67,11 +67,11 @@ export default function App() {
         if (!parsed.storeName || parsed.storeName === 'AsinGo Ikan Asin') {
           parsed.storeName = 'AsinGo';
         }
-        const effectiveLogo = (!parsed.logoUrl || parsed.logoUrl === '/logo.svg')
-          ? INITIAL_SETTINGS.logoUrl
+        const effectiveLogo = (!parsed.logoUrl || parsed.logoUrl === '/logo.svg' || parsed.logoUrl === '')
+          ? '/logo.png'
           : parsed.logoUrl;
-        const effectiveLoadingLogo = (!parsed.loadingLogoUrl || parsed.loadingLogoUrl === '/logo.svg')
-          ? (parsed.logoUrl || INITIAL_SETTINGS.loadingLogoUrl)
+        const effectiveLoadingLogo = (!parsed.loadingLogoUrl || parsed.loadingLogoUrl === '/logo.svg' || parsed.loadingLogoUrl === '')
+          ? (parsed.logoUrl || '/logo.png')
           : parsed.loadingLogoUrl;
 
         return {
